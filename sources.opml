@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0">
+  <head>
+    <title>AI / LLM / Agent Frontier Feeds 2026</title>
+  </head>
+  <body>
+    <outline text="Must-read essay authors">
+      <outline text="Andrej Karpathy" type="rss" xmlUrl="https://karpathy.bearblog.dev/feed/" htmlUrl="https://karpathy.bearblog.dev/"/>
+      <outline text="Simon Willison" type="rss" xmlUrl="https://simonwillison.net/atom/everything/" htmlUrl="https://simonwillison.net/"/>
+      <outline text="Hamel Husain" type="rss" xmlUrl="https://hamel.dev/index.xml" htmlUrl="https://hamel.dev/"/>
+      <outline text="Anthropic Engineering (community scraper)" type="rss" xmlUrl="https://raw.githubusercontent.com/conoro/anthropic-engineering-rss-feed/main/feed.xml" htmlUrl="https://www.anthropic.com/engineering"/>
+      <outline text="HumanLayer 12-Factor Agents (commits)" type="rss" xmlUrl="https://github.com/humanlayer/12-factor-agents/commits.atom" htmlUrl="https://github.com/humanlayer/12-factor-agents"/>
+      <outline text="Thorsten Ball - Register Spill" type="rss" xmlUrl="https://registerspill.thorstenball.com/feed" htmlUrl="https://registerspill.thorstenball.com/"/>
+      <outline text="AI Futures Project (AI 2027)" type="rss" xmlUrl="https://blog.ai-futures.org/feed" htmlUrl="https://blog.ai-futures.org/"/>
+      <outline text="Astral Codex Ten (Scott Alexander)" type="rss" xmlUrl="https://www.astralcodexten.com/feed" htmlUrl="https://www.astralcodexten.com/"/>
+      <outline text="David Silver" type="rss" xmlUrl="https://davidstarsilver.wordpress.com/feed/" htmlUrl="https://davidstarsilver.wordpress.com/"/>
+    </outline>
+
+    <outline text="Individual researcher blogs">
+      <outline text="Interconnects (Nathan Lambert)" type="rss" xmlUrl="https://www.interconnects.ai/feed" htmlUrl="https://www.interconnects.ai/"/>
+      <outline text="Latent Space (swyx)" type="rss" xmlUrl="https://www.latent.space/feed" htmlUrl="https://www.latent.space/"/>
+      <outline text="Lilian Weng - Lil'Log" type="rss" xmlUrl="https://lilianweng.github.io/index.xml" htmlUrl="https://lilianweng.github.io/"/>
+      <outline text="Sebastian Raschka - Ahead of AI" type="rss" xmlUrl="https://magazine.sebastianraschka.com/feed" htmlUrl="https://magazine.sebastianraschka.com/"/>
+      <outline text="Cameron Wolfe - Deep Learning Focus" type="rss" xmlUrl="https://cameronrwolfe.substack.com/feed" htmlUrl="https://cameronrwolfe.substack.com/"/>
+      <outline text="Eugene Yan" type="rss" xmlUrl="https://eugeneyan.com/rss/" htmlUrl="https://eugeneyan.com/"/>
+      <outline text="Chip Huyen" type="rss" xmlUrl="https://huyenchip.com/feed.xml" htmlUrl="https://huyenchip.com/"/>
+      <outline text="Jason Liu" type="rss" xmlUrl="https://jxnl.co/feeds/feed.xml" htmlUrl="https://jxnl.co/"/>
+      <outline text="Dwarkesh Patel" type="rss" xmlUrl="https://www.dwarkesh.com/feed" htmlUrl="https://www.dwarkesh.com/"/>
+      <outline text="Ethan Mollick - One Useful Thing" type="rss" xmlUrl="https://www.oneusefulthing.org/feed" htmlUrl="https://www.oneusefulthing.org/"/>
+      <outline text="Gwern" type="rss" xmlUrl="https://gwern.net/index.xml" htmlUrl="https://gwern.net/"/>
+      <outline text="Neel Nanda" type="rss" xmlUrl="https://www.neelnanda.io/blog?format=rss" htmlUrl="https://www.neelnanda.io/"/>
+      <outline text="Embrace The Red" type="rss" xmlUrl="https://embracethered.com/blog/index.xml" htmlUrl="https://embracethered.com/"/>
+      <outline text="ChinaTalk" type="rss" xmlUrl="https://www.chinatalk.media/feed" htmlUrl="https://www.chinatalk.media/"/>
+    </outline>
+
+    <outline text="OSS tool releases - Agent frameworks">
+      <outline text="LangChain blog" type="rss" xmlUrl="https://blog.langchain.com/rss/" htmlUrl="https://blog.langchain.com/"/>
+      <outline text="LangGraph releases" type="rss" xmlUrl="https://github.com/langchain-ai/langgraph/releases.atom" htmlUrl="https://github.com/langchain-ai/langgraph"/>
+      <outline text="LlamaIndex releases" type="rss" xmlUrl="https://github.com/run-llama/llama_index/releases.atom" htmlUrl="https://github.com/run-llama/llama_index"/>
+      <outline text="DSPy releases" type="rss" xmlUrl="https://github.com/stanfordnlp/dspy/releases.atom" htmlUrl="https://github.com/stanfordnlp/dspy"/>
+      <outline text="CrewAI releases" type="rss" xmlUrl="https://github.com/crewAIInc/crewAI/releases.atom" htmlUrl="https://github.com/crewAIInc/crewAI"/>
+      <outline text="Microsoft Agent Framework" type="rss" xmlUrl="https://devblogs.microsoft.com/agent-framework/feed/" htmlUrl="https://devblogs.microsoft.com/agent-framework/"/>
+      <outline text="smolagents releases" type="rss" xmlUrl="https://github.com/huggingface/smolagents/releases.atom" htmlUrl="https://github.com/huggingface/smolagents"/>
+      <outline text="Pydantic AI releases" type="rss" xmlUrl="https://github.com/pydantic/pydantic-ai/releases.atom" htmlUrl="https://github.com/pydantic/pydantic-ai"/>
+      <outline text="Mastra releases" type="rss" xmlUrl="https://github.com/mastra-ai/mastra/releases.atom" htmlUrl="https://github.com/mastra-ai/mastra"/>
+      <outline text="Inngest AgentKit releases" type="rss" xmlUrl="https://github.com/inngest/agent-kit/releases.atom" htmlUrl="https://github.com/inngest/agent-kit"/>
+    </outline>
+
+    <outline text="OSS tool releases - Claude Code ecosystem">
+      <outline text="wshobson/agents commits" type="rss" xmlUrl="https://github.com/wshobson/agents/commits.atom" htmlUrl="https://github.com/wshobson/agents"/>
+      <outline text="VoltAgent subagents commits" type="rss" xmlUrl="https://github.com/VoltAgent/awesome-claude-code-subagents/commits.atom" htmlUrl="https://github.com/VoltAgent/awesome-claude-code-subagents"/>
+      <outline text="awesome-claude-code commits" type="rss" xmlUrl="https://github.com/hesreallyhim/awesome-claude-code/commits.atom" htmlUrl="https://github.com/hesreallyhim/awesome-claude-code"/>
+      <outline text="claude-squad releases" type="rss" xmlUrl="https://github.com/smtg-ai/claude-squad/releases.atom" htmlUrl="https://github.com/smtg-ai/claude-squad"/>
+    </outline>
+
+    <outline text="OSS tool releases - Eval / Observability">
+      <outline text="Inspect AI releases" type="rss" xmlUrl="https://github.com/UKGovernmentBEIS/inspect_ai/releases.atom" htmlUrl="https://github.com/UKGovernmentBEIS/inspect_ai"/>
+      <outline text="Braintrust blog" type="rss" xmlUrl="https://www.braintrust.dev/blog/rss.xml" htmlUrl="https://www.braintrust.dev/blog"/>
+      <outline text="Arize Phoenix releases" type="rss" xmlUrl="https://github.com/Arize-ai/phoenix/releases.atom" htmlUrl="https://github.com/Arize-ai/phoenix"/>
+      <outline text="W&amp;B Weave releases" type="rss" xmlUrl="https://github.com/wandb/weave/releases.atom" htmlUrl="https://github.com/wandb/weave"/>
+    </outline>
+
+    <outline text="OSS tool releases - Inference">
+      <outline text="vLLM blog" type="rss" xmlUrl="https://blog.vllm.ai/feed.xml" htmlUrl="https://blog.vllm.ai/"/>
+      <outline text="vLLM releases" type="rss" xmlUrl="https://github.com/vllm-project/vllm/releases.atom" htmlUrl="https://github.com/vllm-project/vllm"/>
+      <outline text="SGLang releases" type="rss" xmlUrl="https://github.com/sgl-project/sglang/releases.atom" htmlUrl="https://github.com/sgl-project/sglang"/>
+      <outline text="llama.cpp releases" type="rss" xmlUrl="https://github.com/ggml-org/llama.cpp/releases.atom" htmlUrl="https://github.com/ggml-org/llama.cpp"/>
+      <outline text="Ollama releases" type="rss" xmlUrl="https://github.com/ollama/ollama/releases.atom" htmlUrl="https://github.com/ollama/ollama"/>
+    </outline>
+
+    <outline text="OSS tool releases - Coding agents">
+      <outline text="Cline releases" type="rss" xmlUrl="https://github.com/cline/cline/releases.atom" htmlUrl="https://github.com/cline/cline"/>
+      <outline text="Aider releases" type="rss" xmlUrl="https://github.com/Aider-AI/aider/releases.atom" htmlUrl="https://github.com/Aider-AI/aider"/>
+      <outline text="Continue releases" type="rss" xmlUrl="https://github.com/continuedev/continue/releases.atom" htmlUrl="https://github.com/continuedev/continue"/>
+      <outline text="Zed blog" type="rss" xmlUrl="https://zed.dev/blog.rss" htmlUrl="https://zed.dev/blog"/>
+      <outline text="OpenHands releases" type="rss" xmlUrl="https://github.com/All-Hands-AI/OpenHands/releases.atom" htmlUrl="https://github.com/All-Hands-AI/OpenHands"/>
+      <outline text="SWE-agent releases" type="rss" xmlUrl="https://github.com/SWE-agent/SWE-agent/releases.atom" htmlUrl="https://github.com/SWE-agent/SWE-agent"/>
+    </outline>
+
+    <outline text="OSS tool releases - RAG / Browser / MCP">
+      <outline text="LanceDB releases" type="rss" xmlUrl="https://github.com/lancedb/lancedb/releases.atom" htmlUrl="https://github.com/lancedb/lancedb"/>
+      <outline text="Vespa blog" type="rss" xmlUrl="https://blog.vespa.ai/feed.xml" htmlUrl="https://blog.vespa.ai/"/>
+      <outline text="Browser Use releases" type="rss" xmlUrl="https://github.com/browser-use/browser-use/releases.atom" htmlUrl="https://github.com/browser-use/browser-use"/>
+      <outline text="Stagehand releases" type="rss" xmlUrl="https://github.com/browserbase/stagehand/releases.atom" htmlUrl="https://github.com/browserbase/stagehand"/>
+      <outline text="Playwright releases" type="rss" xmlUrl="https://github.com/microsoft/playwright/releases.atom" htmlUrl="https://github.com/microsoft/playwright"/>
+      <outline text="MCP spec commits" type="rss" xmlUrl="https://github.com/modelcontextprotocol/modelcontextprotocol/commits.atom" htmlUrl="https://github.com/modelcontextprotocol/modelcontextprotocol"/>
+    </outline>
+
+    <outline text="News aggregators - English">
+      <outline text="AI News by smol.ai" type="rss" xmlUrl="https://buttondown.com/ainews/rss" htmlUrl="https://news.smol.ai"/>
+      <outline text="The Batch (Andrew Ng)" type="rss" xmlUrl="https://www.deeplearning.ai/the-batch/feed/" htmlUrl="https://www.deeplearning.ai/the-batch"/>
+      <outline text="Import AI (Jack Clark)" type="rss" xmlUrl="https://jack-clark.net/feed/" htmlUrl="https://jack-clark.net/"/>
+      <outline text="TLDR AI" type="rss" xmlUrl="https://tldr.tech/api/rss/ai" htmlUrl="https://tldr.tech/ai"/>
+      <outline text="TheSequence" type="rss" xmlUrl="https://thesequence.substack.com/feed" htmlUrl="https://thesequence.substack.com/"/>
+      <outline text="HF Daily Papers" type="rss" xmlUrl="https://jamesg.blog/hf-papers.xml" htmlUrl="https://huggingface.co/papers"/>
+      <outline text="Hacker News front page" type="rss" xmlUrl="https://news.ycombinator.com/rss" htmlUrl="https://news.ycombinator.com"/>
+      <outline text="r/LocalLLaMA" type="rss" xmlUrl="https://www.reddit.com/r/LocalLLaMA/.rss" htmlUrl="https://reddit.com/r/LocalLLaMA"/>
+      <outline text="Stratechery" type="rss" xmlUrl="https://stratechery.com/feed/" htmlUrl="https://stratechery.com/"/>
+      <outline text="The Pragmatic Engineer" type="rss" xmlUrl="https://newsletter.pragmaticengineer.com/feed" htmlUrl="https://newsletter.pragmaticengineer.com/"/>
+      <outline text="Marginal Revolution" type="rss" xmlUrl="https://marginalrevolution.com/feed" htmlUrl="https://marginalrevolution.com/"/>
+    </outline>
+
+    <outline text="News aggregators - Chinese">
+      <outline text="机器之心" type="rss" xmlUrl="https://www.jiqizhixin.com/rss" htmlUrl="https://www.jiqizhixin.com"/>
+      <outline text="量子位 QbitAI" type="rss" xmlUrl="https://www.qbitai.com/feed" htmlUrl="https://www.qbitai.com"/>
+      <outline text="新智元 AI Era" type="rss" xmlUrl="https://aiera.com.cn/feed" htmlUrl="https://aiera.com.cn"/>
+      <outline text="智东西 Zhidx" type="rss" xmlUrl="https://zhidx.com/feed" htmlUrl="https://zhidx.com"/>
+      <outline text="极客公园" type="rss" xmlUrl="https://www.geekpark.net/rss" htmlUrl="https://www.geekpark.net"/>
+      <outline text="InfoQ 中文" type="rss" xmlUrl="https://feed.infoq.cn" htmlUrl="https://www.infoq.cn"/>
+      <outline text="36氪" type="rss" xmlUrl="https://36kr.com/feed" htmlUrl="https://36kr.com"/>
+    </outline>
+
+    <outline text="Podcasts">
+      <outline text="Latent Space" type="rss" xmlUrl="https://api.substack.com/feed/podcast/1084089.rss" htmlUrl="https://www.latent.space/podcast"/>
+      <outline text="Dwarkesh Podcast" type="rss" xmlUrl="https://api.substack.com/feed/podcast/68003.rss" htmlUrl="https://www.dwarkesh.com/"/>
+      <outline text="Cognitive Revolution" type="rss" xmlUrl="https://feeds.transistor.fm/the-cognitive-revolution" htmlUrl="https://www.cognitiverevolution.ai/"/>
+      <outline text="ChinaTalk" type="rss" xmlUrl="https://feeds.megaphone.fm/CHTH3437994392" htmlUrl="https://www.chinatalk.media/"/>
+    </outline>
+  </body>
+</opml>
