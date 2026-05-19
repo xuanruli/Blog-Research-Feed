@@ -30,3 +30,7 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Python build artifacts
+dist/
+build/
