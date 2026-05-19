@@ -1,0 +1,15 @@
+name: blog-research-feed-curator
+model:
+  id: claude-opus-4-7
+system: "@./agent/system_prompt.md"
+description: >
+  Daily AI-news curator. Uses the pre-installed `brf` CLI inside the container
+  to fetch RSS / X / podcasts / videos, composes a Slack-friendly report, and
+  posts it via `brf report slack`. Secrets are mounted at /workspace/.env by
+  the cron orchestrator at session-create time.
+
+tools:
+  # Built-in toolset: bash, read, write, edit, glob, grep, web_search, web_fetch.
+  # Bash is the primary surface — the agent pipes brf subcommands together
+  # rather than going through a custom-tool round-trip.
+  - type: agent_toolset_20260401

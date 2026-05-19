@@ -1,0 +1,56 @@
+name: daily-ai-news
+
+on:
+  schedule:
+    - cron: "0 9 * * *"  # 09:00 UTC = 17:00 Beijing / 01:00 PT
+  workflow_dispatch:
+
+concurrency:
+  group: daily-ai-news
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Pin build tools (feedparser/sgmllib3k needs setuptools<72)
+        run: pip install --upgrade "setuptools<72" wheel
+
+      - name: Install orchestrator + brf
+        run: pip install -e .
+
+      - name: Run daily curator
+        env:
+          # Anthropic creds — orchestrator uses these to call sessions/files API.
+          # NOT forwarded into the container (the agent doesn't recurse into
+          # the API from inside its own session).
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_AGENT_ID: ${{ secrets.ANTHROPIC_AGENT_ID }}
+          ANTHROPIC_ENV_ID: ${{ secrets.ANTHROPIC_ENV_ID }}
+          # Container-bound — orchestrator builds these into the uploaded .env
+          # at session-create time (see orchestrator/daily.py PASSTHROUGH_KEYS).
+          FIRECRAWL_API_KEY: ${{ secrets.FIRECRAWL_API_KEY }}
+          X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: python -m orchestrator.daily
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-failure-logs
+          path: |
+            *.log
+          retention-days: 7
