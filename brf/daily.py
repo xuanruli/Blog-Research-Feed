@@ -44,7 +44,10 @@ PASSTHROUGH_KEYS = (
 )
 
 CONTAINER_ENV_PATH = "/workspace/.env"
-FILES_BETA = "files-api-2025-04-14"
+# The SDK auto-sets files-api-2025-04-14 on client.beta.files.*; we also need
+# managed-agents-2026-04-01 because we're using files in a Managed Agents
+# context (per docs/managed_agents/files.md).
+FILES_BETAS = ["managed-agents-2026-04-01", "files-api-2025-04-14"]
 
 
 def _setup_logging() -> None:
@@ -121,13 +124,13 @@ def _upload_env_file(client: Any, payload: bytes) -> Any:
     buf = io.BytesIO(payload)
     return client.beta.files.upload(
         file=(".env", buf, "text/plain"),
-        betas=[FILES_BETA],
+        betas=FILES_BETAS,
     )
 
 
 def _try_delete_file(client: Any, file_id: str) -> None:
     try:
-        client.beta.files.delete(file_id, betas=[FILES_BETA])
+        client.beta.files.delete(file_id, betas=FILES_BETAS)
         LOG.info("deleted uploaded env file %s", file_id)
     except Exception as exc:  # noqa: BLE001
         LOG.warning("failed to delete env file %s: %s", file_id, exc)
@@ -175,8 +178,10 @@ def run(dry_run: bool = False) -> None:
     delete_after = True
     try:
         LOG.info("creating session agent=%s env=%s", agent_id, env_id)
+        # String form = "latest version" per docs/managed_agents/sessions.md §119.
+        # The {type:agent,id:...} object form requires `version` to pin.
         session = client.beta.sessions.create(
-            agent={"type": "agent", "id": agent_id},
+            agent=agent_id,
             environment_id=env_id,
             title=f"Daily aggregation {today}",
             resources=[
@@ -226,7 +231,14 @@ def run(dry_run: bool = False) -> None:
 
 
 def _drain(stream: Any) -> None:
-    """Consume the SSE stream, logging events; break on terminal idle/terminated."""
+    """Consume the SSE stream, logging events; break on terminal idle/terminated.
+
+    Sessions start in ``idle`` (per docs/managed_agents/sessions.md §417), so
+    we must NOT break on the first idle — only after we've seen at least one
+    ``status_running`` transition, which proves the agent actually started
+    working on our kickoff.
+    """
+    has_seen_running = False
     for event in stream:
         etype = getattr(event, "type", None)
         if etype == "agent.message":
@@ -243,11 +255,20 @@ def _drain(stream: Any) -> None:
             text = "".join(getattr(b, "text", "") or "" for b in (getattr(event, "content", []) or []))
             LOG.debug("agent.thinking: %s", _truncate(text, 200))
         elif etype == "session.status_running":
+            has_seen_running = True
             LOG.info("status_running")
         elif etype == "session.status_idle":
             stop = getattr(event, "stop_reason", None)
             stop_type = getattr(stop, "type", None) if stop else None
-            LOG.info("status_idle stop_reason=%s", stop_type)
+            LOG.info(
+                "status_idle stop_reason=%s has_seen_running=%s",
+                stop_type, has_seen_running,
+            )
+            # Sessions start idle. If we hit idle before agent ever ran,
+            # don't terminate — wait for it to pick up the kickoff and
+            # transition to running.
+            if not has_seen_running:
+                continue
             # Without custom tools, requires_action shouldn't happen — log
             # and continue if it does. All other stop reasons are terminal.
             if stop_type == "requires_action":
