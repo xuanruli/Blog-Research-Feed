@@ -10,7 +10,6 @@ check is re-run.
 """
 from __future__ import annotations
 
-import socket
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
@@ -19,6 +18,7 @@ from typing import Optional
 from xml.etree import ElementTree as ET
 
 import feedparser
+import httpx
 
 # ---------------------------------------------------------------------------
 # Health-check derived feed lists. Source: SOURCES_HEALTH.md §1 and §2.
@@ -65,6 +65,14 @@ SUMMARY_ONLY_FEEDS: set[str] = {
 SUMMARY_MAX_CHARS = 500
 DEFAULT_TIMEOUT_SECS = 15
 MAX_WORKERS = 10
+
+
+def _norm(u: str) -> str:
+    return u.rstrip("/").lower()
+
+
+_SKIP_NORM = {_norm(u) for u in SKIP_FEEDS}
+_SUMMARY_NORM = {_norm(u) for u in SUMMARY_ONLY_FEEDS}
 
 
 def _default_opml_path() -> Path:
@@ -115,10 +123,16 @@ def _fetch_one(feed_meta: dict, since: Optional[datetime]) -> list[dict]:
     """Fetch a single feed and return normalized items. Logs to stderr on error."""
     xml_url = feed_meta["xml_url"]
     items: list[dict] = []
-    needs_firecrawl = xml_url in SUMMARY_ONLY_FEEDS
+    needs_firecrawl = _norm(xml_url) in _SUMMARY_NORM
 
     try:
-        parsed = feedparser.parse(xml_url)
+        r = httpx.get(
+            xml_url,
+            timeout=DEFAULT_TIMEOUT_SECS,
+            follow_redirects=True,
+            headers={"User-Agent": "Mozilla/5.0 BlogResearchFeed/1.0"},
+        )
+        parsed = feedparser.parse(r.content)
     except Exception as exc:  # network, parse, anything
         print(f"[rss] FAILED {xml_url}: {exc}", file=sys.stderr)
         return items
@@ -191,10 +205,9 @@ def fetch_recent(
     Feeds listed in ``SKIP_FEEDS`` (``SOURCES_HEALTH.md`` §1) are skipped.
     Per-feed errors are logged to stderr; this function never raises.
     """
-    socket.setdefaulttimeout(DEFAULT_TIMEOUT_SECS)
     opml_path = opml_path or _default_opml_path()
     feeds = _parse_opml(opml_path)
-    live_feeds = [f for f in feeds if f["xml_url"] not in SKIP_FEEDS]
+    live_feeds = [f for f in feeds if _norm(f["xml_url"]) not in _SKIP_NORM]
 
     all_items: list[dict] = []
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:

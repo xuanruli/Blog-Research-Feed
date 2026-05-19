@@ -37,10 +37,7 @@ def scrape(url: str) -> dict:
     """
     app = _client()
     try:
-        resp = app.scrape_url(
-            url,
-            params={"formats": ["markdown"], "onlyMainContent": True},
-        )
+        resp = app.scrape_url(url, formats=["markdown"], only_main_content=True)
     except Exception as e:
         raise RuntimeError(f"Firecrawl scrape failed for {url}: {e}") from e
 
@@ -79,7 +76,7 @@ def search(query: str, limit: int = 10) -> list[dict]:
     capped = max(1, min(limit, 25))
     app = _client()
     try:
-        resp = app.search(query, params={"limit": capped})
+        resp = app.search(query, limit=capped)
     except Exception as e:
         raise RuntimeError(f"Firecrawl search failed for query {query!r}: {e}") from e
 
@@ -88,12 +85,11 @@ def search(query: str, limit: int = 10) -> list[dict]:
         err = _get(resp, "error", "unknown error")
         raise RuntimeError(f"Firecrawl search error: {err}")
 
-    raw_results = _get(resp, "data", resp)
-    # `data` may itself be a list, or contain `web` etc. in newer SDKs.
+    raw_results = _get(resp, "data", None)
+    if raw_results is None:
+        raw_results = _get(resp, "web") or _get(resp, "results") or []
     if isinstance(raw_results, dict):
         raw_results = raw_results.get("web") or raw_results.get("results") or []
-    if raw_results is None:
-        raw_results = []
 
     out: list[dict] = []
     for r in raw_results:

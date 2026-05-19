@@ -116,43 +116,27 @@ def _fetch_transcript(video_id: str) -> tuple[Optional[str], Optional[str], Opti
         return None, "error", f"youtube-transcript-api import failed: {e}"
 
     # Preferred language order.
-    languages = ["en", "en-US", "en-GB"]
+    languages = ["en", "en-US", "en-GB", "zh-Hans", "zh-Hant"]
 
+    api = YouTubeTranscriptApi()
     try:
-        # Try list_transcripts so we can pick generated as a fallback.
         try:
-            tlist = YouTubeTranscriptApi.list_transcripts(video_id)
-            transcript = None
-            # Try manually-created in preferred languages first.
-            try:
-                transcript = tlist.find_manually_created_transcript(languages)
-            except Exception:
-                pass
-            # Then auto-generated in preferred languages.
-            if transcript is None:
-                try:
-                    transcript = tlist.find_generated_transcript(languages)
-                except Exception:
-                    pass
-            # Then anything, translated to English if possible.
-            if transcript is None:
-                for t in tlist:
-                    transcript = t
-                    if t.is_translatable:
-                        try:
-                            transcript = t.translate("en")
-                        except Exception:
-                            pass
-                    break
-            if transcript is None:
+            # Direct fetch: library handles manual+auto fallback across languages.
+            entries = api.fetch(video_id, languages=languages)
+        except NoTranscriptFound:
+            # Fall back to listing and translating any translatable transcript.
+            tlist = api.list(video_id)
+            translated = None
+            for t in tlist:
+                if t.is_translatable:
+                    try:
+                        translated = t.translate("en").fetch()
+                        break
+                    except Exception:
+                        continue
+            if translated is None:
                 return None, "no_transcript", "no transcripts available"
-            entries = transcript.fetch()
-        except (TranscriptsDisabled, NoTranscriptFound):
-            # Last-ditch direct call.
-            try:
-                entries = YouTubeTranscriptApi.get_transcript(video_id, languages=languages)
-            except Exception as e:
-                return None, "no_transcript", str(e)
+            entries = translated
 
         # Normalize entries (FetchedTranscriptSnippet or dict).
         lines = []
@@ -161,14 +145,11 @@ def _fetch_transcript(video_id: str) -> tuple[Optional[str], Optional[str], Opti
             if text:
                 lines.append(text)
         return "\n".join(lines), "ok", None
+    except TranscriptsDisabled as e:
+        return None, "no_transcript", str(e)
     except VideoUnavailable as e:
         return None, "private_or_deleted", str(e)
     except Exception as e:
-        msg = str(e).lower()
-        if "unavailable" in msg or "private" in msg or "deleted" in msg:
-            return None, "private_or_deleted", str(e)
-        if "no transcript" in msg or "disabled" in msg or "could not retrieve" in msg:
-            return None, "no_transcript", str(e)
         return None, "error", str(e)
 
 

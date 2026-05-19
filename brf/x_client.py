@@ -51,10 +51,15 @@ def fetch_user_recent(
         result["error_message"] = "X_BEARER_TOKEN not set"
         return result
 
+    now = datetime.now(timezone.utc)
     if since is None:
-        since = datetime.now(timezone.utc) - timedelta(hours=24)
+        since = now - timedelta(hours=24)
     if since.tzinfo is None:
         since = since.replace(tzinfo=timezone.utc)
+    # X API v2 rejects start_time newer than now-10s.
+    max_start = now - timedelta(seconds=10)
+    if since > max_start:
+        since = max_start
     start_time = since.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     headers = {"Authorization": f"Bearer {token}"}

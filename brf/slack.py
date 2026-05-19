@@ -133,11 +133,8 @@ def _hard_split(text: str, max_chars: int) -> list[str]:
                 # Single paragraph too large — slice by chars.
                 for i in range(0, len(para), max_chars):
                     piece = para[i : i + max_chars]
-                    if i + max_chars >= len(para):
-                        current = piece
-                    else:
-                        chunks.append(piece)
-                        current = ""
+                    chunks.append(piece)
+                current = ""
     if current:
         chunks.append(current)
     return chunks

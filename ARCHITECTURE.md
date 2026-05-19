@@ -93,10 +93,10 @@ the orchestrator host (where API keys live).
 
 - **GitHub Secrets** (injected as env into the runner — and thus into the
   orchestrator's process, where `brf` subcommands read them):
-  - `ANTHROPIC_API_KEY`, `ANTHROPIC_AGENT_ID`
+  - `ANTHROPIC_API_KEY`, `ANTHROPIC_AGENT_ID`, `ANTHROPIC_ENV_ID`
   - `FIRECRAWL_API_KEY`, `X_BEARER_TOKEN`
-  - `YOUTUBE_API_KEY` (optional), `OPENAI_API_KEY` (Whisper)
-  - `SLACK_BOT_TOKEN`, `SLACK_CHANNEL_ID`
+  - `OPENAI_API_KEY` (Whisper)
+  - `SLACK_WEBHOOK_URL` (Slack incoming webhook for #ai-news)
 - **Anthropic vault**: nothing today. Per
   `shared/managed-agents-client-patterns.md` Pattern 9, vaults are MCP-only;
   the hosted container has no env-var mechanism, so key-bearing CLIs MUST stay

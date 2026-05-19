@@ -15,6 +15,7 @@ import logging
 import os
 import signal
 import sys
+import threading
 from typing import Any
 
 from .config import get_env
@@ -139,7 +140,11 @@ def _arm_timeout(seconds: int) -> None:
     def _handler(signum, frame):  # noqa: ARG001
         raise _Timeout(f"orchestrator exceeded {seconds}s hard cap")
 
-    # signal.alarm is POSIX-only and main-thread-only, which is fine for cron.
+    # signal.alarm is POSIX-only and main-thread-only.
+    if not hasattr(signal, "SIGALRM"):
+        return  # Windows/non-POSIX
+    if threading.current_thread() is not threading.main_thread():
+        return
     signal.signal(signal.SIGALRM, _handler)
     signal.alarm(seconds)
 
@@ -157,7 +162,8 @@ def _disarm_timeout() -> None:
 def run(dry_run: bool = False) -> None:
     """Run the daily orchestration loop."""
     _setup_logging()
-    today = _today_iso()
+    today = _dt.date.today().isoformat()
+    yesterday = (_dt.date.today() - _dt.timedelta(days=1)).isoformat()
 
     agent_id = get_env("ANTHROPIC_AGENT_ID", required=not dry_run)
     env_id = get_env("ANTHROPIC_ENV_ID", required=not dry_run)
@@ -190,9 +196,9 @@ def run(dry_run: bool = False) -> None:
     LOG.info("session created id=%s", session.id)
 
     kickoff_text = (
-        f"今天是 {today}. 拉取过去24小时的内容，按照系统提示词的指示完成"
-        f"今日 AI 新闻聚合：调用 fetch_rss_recent，筛选并 firecrawl_scrape，"
-        f"必要时 fetch_x_user / 转写音视频，最后 post_to_slack 一次。"
+        f"今天是 {today} (UTC)。请处理 {yesterday} 的内容："
+        f"先调用 fetch_rss_recent(since_date='{yesterday}')，"
+        f"然后按 system prompt 流程执行。"
     )
 
     _arm_timeout(HARD_TIMEOUT_SECONDS)

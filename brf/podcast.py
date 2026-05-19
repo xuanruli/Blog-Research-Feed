@@ -5,6 +5,7 @@ transcribes it via the OpenAI Whisper API (`whisper-1`).
 """
 from __future__ import annotations
 
+import datetime as dt
 import json
 import os
 import sys
@@ -15,7 +16,7 @@ import httpx
 
 from .config import get_env
 
-_MAX_BYTES = 100 * 1024 * 1024  # 100 MB
+_MAX_BYTES = 25 * 1024 * 1024  # Whisper API limit
 
 
 def _pick_enclosure_url(entry) -> Optional[str]:
@@ -132,7 +133,11 @@ def get_transcript(rss_url: str, episode_index: int = 0) -> dict:
 
     entry = entries[episode_index]
     result["title"] = entry.get("title")
-    result["published"] = entry.get("published") or entry.get("updated")
+    pp = entry.get("published_parsed") or entry.get("updated_parsed")
+    result["published"] = (
+        dt.datetime(*pp[:6], tzinfo=dt.timezone.utc).isoformat()
+        if pp else entry.get("published") or entry.get("updated")
+    )
 
     audio_url = _pick_enclosure_url(entry)
     result["episode_url"] = audio_url

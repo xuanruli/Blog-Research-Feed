@@ -11,7 +11,7 @@ requires-python = ">=3.10"
 authors = [{ name = "Blog Research Feed" }]
 dependencies = [
     "click",
-    "feedparser",
+    "feedparser>=6.0.10",
     "anthropic",
     "firecrawl-py",
     "httpx",
