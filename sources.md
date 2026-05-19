@@ -71,6 +71,7 @@
 - Shreya Shankar — https://www.sh-reya.com/
 - Jason Liu — https://jxnl.co/
 - Jay Alammar — https://newsletter.languagemodels.co/ （老博客已冻结）
+- Matt Pocock (Total TypeScript / AI Hero) — 📡 https://www.mattpocock.com/rss.xml · ▶️ https://www.youtube.com/feeds/videos.xml?channel_id=UCswG6FSbgZjbWtdf_hMLaow · 𝕏 @mattpocockuk （**主信号在 YouTube**：AI coding workflow / TS for agents 实操技巧）
 
 ### Tier 4（战略 / 长访谈）
 - Dwarkesh Patel — https://www.dwarkesh.com/
@@ -110,7 +111,7 @@
 
 **Agent / Infra**: @hwchase17 · @jerryjliu0 · @lateinteraction · @swyx · @_philschmid · @samuel_colvin · @tonyhb
 
-**实操 / Eval / 提示**: @simonw · @hamelhusain · @eugeneyan · @omarsar0 · @jobergum · @bclavie · @OfirPress · @sirupsen
+**实操 / Eval / 提示**: @simonw · @hamelhusain · @eugeneyan · @omarsar0 · @jobergum · @bclavie · @OfirPress · @sirupsen · @mattpocockuk
 
 **中国 / Asia 模型观察**: @teortaxesTex · @nrehiew_ · @reach_vb
 
