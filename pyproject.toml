@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "blog-research-feed"
+version = "0.1.0"
+description = "AI-news aggregation CLI used as a custom-tool dispatcher for a Managed Agent."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Blog Research Feed" }]
+dependencies = [
+    "click",
+    "feedparser",
+    "anthropic",
+    "firecrawl-py",
+    "httpx",
+    "python-dotenv",
+    "pyyaml",
+    "youtube-transcript-api",
+    "yt-dlp",
+    "requests",
+]
+
+[project.scripts]
+brf = "brf.main:cli"
+
+[tool.setuptools.packages.find]
+include = ["brf*"]

@@ -1,0 +1,109 @@
+name: blog-research-feed-curator
+model:
+  id: claude-opus-4-7
+system: "@./agent/system_prompt.md"
+description: Daily AI-news curator that gathers yesterday's content from RSS / X / podcasts and posts a sectioned Slack report.
+tools:
+  - type: agent_toolset_20260401
+
+  - type: custom
+    name: fetch_rss_recent
+    description: |
+      Fetch recent items from the curated RSS source list (defined in sources.opml, respecting SOURCES_HEALTH.md flags).
+      ALWAYS call this first at the start of a session to get the triage pool of ~50-150 items.
+      Returns items published on/after `since_date`. Items with `full_text` populated do not need a follow-up scrape.
+    input_schema:
+      type: object
+      properties:
+        since_date:
+          type: string
+          description: "ISO8601 date or datetime (e.g. '2026-05-18' or '2026-05-18T00:00:00Z'). Only items with published >= this are returned."
+      required: [since_date]
+
+  - type: custom
+    name: fetch_x_user
+    description: |
+      Fetch recent posts from a single X (Twitter) user since `since_date`.
+      Use for X-only authors listed in sources.md who have no RSS feed.
+      May return {"error": "no_credits"} when the X API quota is exhausted — in that case silently skip and continue.
+    input_schema:
+      type: object
+      properties:
+        handle:
+          type: string
+          description: "X handle without the @ prefix (e.g. 'karpathy')."
+        since_date:
+          type: string
+          description: "ISO8601 date or datetime; only posts on/after this timestamp are returned."
+      required: [handle, since_date]
+
+  - type: custom
+    name: firecrawl_scrape
+    description: |
+      Scrape a single URL via Firecrawl and return clean markdown with extracted metadata.
+      Use for promising RSS items whose `full_text` is empty, paywalled-ish blogs, or any page you want the full body of before deciding to feature it.
+      Cost is non-trivial — only call after the headline + RSS summary already look interesting.
+    input_schema:
+      type: object
+      properties:
+        url:
+          type: string
+          description: "Absolute https URL of the page to scrape."
+      required: [url]
+
+  - type: custom
+    name: firecrawl_search
+    description: |
+      Web search via Firecrawl. Use ONLY for hot topics not covered by the RSS source list (e.g. a breaking model release that no curated source has indexed yet). Do not use for general background research — prefer the RSS pool.
+    input_schema:
+      type: object
+      properties:
+        query:
+          type: string
+          description: "Natural-language search query."
+        limit:
+          type: integer
+          description: "Max results to return (1-20). Default 10."
+          default: 10
+      required: [query]
+
+  - type: custom
+    name: fetch_youtube_transcript
+    description: |
+      Fetch the transcript of a YouTube video. Use sparingly — at most 1-2 videos per daily run, only for talks/interviews that look unusually high-signal from title + description alone.
+    input_schema:
+      type: object
+      properties:
+        url:
+          type: string
+          description: "Full YouTube watch URL (https://www.youtube.com/watch?v=...)."
+      required: [url]
+
+  - type: custom
+    name: fetch_podcast_transcript
+    description: |
+      Transcribe a podcast episode via Whisper. EXPENSIVE (~$0.36/episode). Budget: max 1-2 episodes per daily run, gated on the title strongly suggesting AI-relevant content.
+      `episode_index=0` means the most recent episode in the feed.
+    input_schema:
+      type: object
+      properties:
+        rss_url:
+          type: string
+          description: "Podcast RSS feed URL."
+        episode_index:
+          type: integer
+          description: "0-indexed position from the most recent episode. Default 0 (latest)."
+          default: 0
+      required: [rss_url]
+
+  - type: custom
+    name: post_to_slack
+    description: |
+      Post the final daily report to the #ai-news Slack channel. Call this EXACTLY ONCE at the end of the session, after the report markdown is fully composed. Calling this signals the run is complete — do not emit any further messages or tool calls afterward.
+    input_schema:
+      type: object
+      properties:
+        report_markdown:
+          type: string
+          description: "The complete Slack-flavored markdown report. Should follow the section structure in the system prompt and be capped around 2500 words."
+      required: [report_markdown]
