@@ -1,4 +1,4 @@
-name: blog-research-feed-env
+name: blog-research-feed-env-v2  # v2: pin setuptools<72, install brf from @main
 config:
   type: cloud
 
@@ -14,10 +14,15 @@ config:
       # jq: agent uses it in bash pipelines (`brf fetch rss | jq ...`).
       - jq
     pip:
+      # IMPORTANT: pin setuptools < 72 BEFORE installing brf — feedparser's
+      # transitive dep sgmllib3k won't build with newer setuptools. Order
+      # matters: pip processes this list left-to-right.
+      - "setuptools<72"
+      - "wheel"
       # Install the brf CLI from the project repo. Pinned to the dev branch
       # for now — switch to @main after the first merge.
       #
       # NOTE: changing this URL requires creating a *new* environment object
       # (environments are immutable after create per the docs). The pip build
       # is cached across sessions that share the same environment.
-      - "git+https://github.com/xuanruli/blog-research-feed.git@claude/test-api-keys-pshaH"
+      - "git+https://github.com/xuanruli/blog-research-feed.git@main"
