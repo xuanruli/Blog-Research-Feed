@@ -1,22 +1,28 @@
-"""Daily orchestrator for the Blog-Research-Feed Managed Agent.
+"""Daily orchestrator entry point.
 
 Per run:
 
 1. Build a ``.env`` payload from the host's environment (only the keys the
    container needs), upload via Files API.
-2. Create a session that references the pre-created agent + environment and
+2. Create a session referencing the pre-created agent + environment that
    mounts the uploaded .env at ``/workspace/.env``.
 3. Stream events for logs/visibility; exit when the session goes idle with a
-   terminal stop_reason or terminates.
-4. Best-effort delete the uploaded .env file at the end (kept on failure for
-   debugging).
+   terminal stop_reason (after seeing at least one running transition) or
+   terminates.
+4. Best-effort delete the uploaded .env file on clean exit (kept on failure
+   for forensic debug).
+
+Run via:
+
+    python -m orchestrator.daily            # real run
+    python -m orchestrator.daily --dry-run  # planning only, no API calls
 
 The agent itself drives all the work via the pre-installed ``brf`` CLI in
-bash. There is no custom-tool dispatch in this process — that pattern was
-removed once the env-file mount made on-container secrets viable.
+bash inside its session container.
 """
 from __future__ import annotations
 
+import argparse
 import datetime as _dt
 import io
 import json
@@ -27,15 +33,13 @@ import sys
 import threading
 from typing import Any, Optional
 
-from .config import get_env
-
-LOG = logging.getLogger("brf.daily")
+LOG = logging.getLogger("orchestrator.daily")
 
 HARD_TIMEOUT_SECONDS = 30 * 60
 
-# Keys we forward into the container .env. Anything else stays host-side.
-# ANTHROPIC_API_KEY is intentionally NOT included — the agent shouldn't
-# call back into the API from inside its own session.
+# Keys forwarded into the container .env. Anything else stays host-side.
+# ANTHROPIC_* is intentionally NOT included — the agent shouldn't call back
+# into the API from inside its own session.
 PASSTHROUGH_KEYS = (
     "FIRECRAWL_API_KEY",
     "X_BEARER_TOKEN",
@@ -48,6 +52,16 @@ CONTAINER_ENV_PATH = "/workspace/.env"
 # managed-agents-2026-04-01 because we're using files in a Managed Agents
 # context (per docs/managed_agents/files.md).
 FILES_BETAS = ["managed-agents-2026-04-01", "files-api-2025-04-14"]
+
+
+# ---------------------------------------------------------------------------
+# Env loading (host-side; no dep on brf)
+# ---------------------------------------------------------------------------
+def _get_env(key: str, default: Optional[str] = None, required: bool = False) -> Optional[str]:
+    value = os.environ.get(key, default)
+    if required and (value is None or value == ""):
+        raise RuntimeError(f"Required environment variable not set: {key}")
+    return value
 
 
 def _setup_logging() -> None:
@@ -94,10 +108,10 @@ def _disarm_timeout() -> None:
 def _build_env_payload(extra: Optional[dict[str, str]] = None) -> bytes:
     """Render PASSTHROUGH_KEYS (plus optional extras) as KEY=value lines.
 
-    Values are quoted with double-quotes; embedded double-quotes are escaped.
-    Missing keys are skipped (the container side will fail loud at use time).
+    Values are quoted with double-quotes; embedded backslashes/quotes are
+    escaped. Missing keys are skipped (the container side fails loud at use
+    time).
     """
-    lines: list[str] = []
     seen: set[str] = set()
     pairs: list[tuple[str, str]] = []
     for key in PASSTHROUGH_KEYS:
@@ -113,6 +127,7 @@ def _build_env_payload(extra: Optional[dict[str, str]] = None) -> bytes:
             continue
         pairs.append((key, value))
 
+    lines = []
     for key, value in pairs:
         escaped = value.replace("\\", "\\\\").replace('"', '\\"')
         lines.append(f'{key}="{escaped}"')
@@ -120,7 +135,6 @@ def _build_env_payload(extra: Optional[dict[str, str]] = None) -> bytes:
 
 
 def _upload_env_file(client: Any, payload: bytes) -> Any:
-    """Upload the .env payload via Files API; return the FileMetadata object."""
     buf = io.BytesIO(payload)
     return client.beta.files.upload(
         file=(".env", buf, "text/plain"),
@@ -139,32 +153,30 @@ def _try_delete_file(client: Any, file_id: str) -> None:
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
-def run(dry_run: bool = False) -> None:
+def run(dry_run: bool = False) -> int:
     _setup_logging()
     today = _dt.date.today().isoformat()
     yesterday = (_dt.date.today() - _dt.timedelta(days=1)).isoformat()
 
-    agent_id = get_env("ANTHROPIC_AGENT_ID", required=not dry_run)
-    env_id = get_env("ANTHROPIC_ENV_ID", required=not dry_run)
-    get_env("ANTHROPIC_API_KEY", required=not dry_run)
+    agent_id = _get_env("ANTHROPIC_AGENT_ID", required=not dry_run)
+    env_id = _get_env("ANTHROPIC_ENV_ID", required=not dry_run)
+    _get_env("ANTHROPIC_API_KEY", required=not dry_run)
 
     env_payload = _build_env_payload()
     LOG.info("env payload: %d bytes", len(env_payload))
 
     if dry_run:
         plan = {
-            "agent": {"type": "agent", "id": agent_id},
+            "agent": agent_id,
             "environment_id": env_id,
             "today": today,
             "yesterday": yesterday,
-            "env_keys": [
-                k for k in PASSTHROUGH_KEYS if os.environ.get(k)
-            ],
+            "env_keys": [k for k in PASSTHROUGH_KEYS if os.environ.get(k)],
             "mount_path": CONTAINER_ENV_PATH,
         }
         LOG.info("--dry-run plan: %s", json.dumps(plan, default=str))
         print(json.dumps(plan, indent=2, default=str))
-        return
+        return 0
 
     from anthropic import Anthropic
 
@@ -174,12 +186,9 @@ def run(dry_run: bool = False) -> None:
     uploaded = _upload_env_file(client, env_payload)
     LOG.info("uploaded file id=%s", uploaded.id)
 
-    session = None
     delete_after = True
     try:
         LOG.info("creating session agent=%s env=%s", agent_id, env_id)
-        # String form = "latest version" per docs/managed_agents/sessions.md §119.
-        # The {type:agent,id:...} object form requires `version` to pin.
         session = client.beta.sessions.create(
             agent=agent_id,
             environment_id=env_id,
@@ -192,7 +201,11 @@ def run(dry_run: bool = False) -> None:
                 }
             ],
         )
-        LOG.info("session id=%s status=%s", session.id, getattr(session, "status", "?"))
+        LOG.info(
+            "session id=%s status=%s",
+            session.id,
+            getattr(session, "status", "?"),
+        )
 
         kickoff_text = (
             f"今天 (UTC) 是 {today}。请处理 {yesterday} 的内容：\n"
@@ -228,10 +241,11 @@ def run(dry_run: bool = False) -> None:
     finally:
         if delete_after:
             _try_delete_file(client, uploaded.id)
+    return 0
 
 
 def _drain(stream: Any) -> None:
-    """Consume the SSE stream, logging events; break on terminal idle/terminated.
+    """Consume the SSE stream; break on terminal idle/terminated.
 
     Sessions start in ``idle`` (per docs/managed_agents/sessions.md §417), so
     we must NOT break on the first idle — only after we've seen at least one
@@ -252,7 +266,10 @@ def _drain(stream: Any) -> None:
             err = getattr(event, "is_error", False)
             LOG.info("agent.tool_result is_error=%s", err)
         elif etype == "agent.thinking":
-            text = "".join(getattr(b, "text", "") or "" for b in (getattr(event, "content", []) or []))
+            text = "".join(
+                getattr(b, "text", "") or ""
+                for b in (getattr(event, "content", []) or [])
+            )
             LOG.debug("agent.thinking: %s", _truncate(text, 200))
         elif etype == "session.status_running":
             has_seen_running = True
@@ -264,13 +281,8 @@ def _drain(stream: Any) -> None:
                 "status_idle stop_reason=%s has_seen_running=%s",
                 stop_type, has_seen_running,
             )
-            # Sessions start idle. If we hit idle before agent ever ran,
-            # don't terminate — wait for it to pick up the kickoff and
-            # transition to running.
             if not has_seen_running:
                 continue
-            # Without custom tools, requires_action shouldn't happen — log
-            # and continue if it does. All other stop reasons are terminal.
             if stop_type == "requires_action":
                 LOG.warning(
                     "unexpected requires_action without custom tools; continuing"
@@ -294,3 +306,21 @@ def _truncate(text: str, limit: int = 500) -> str:
     if len(text) <= limit:
         return text
     return text[:limit] + f"... [+{len(text) - limit} chars]"
+
+
+def main(argv: Optional[list[str]] = None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="python -m orchestrator.daily",
+        description=__doc__.split("\n\n")[0] if __doc__ else None,
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Validate config + log the session-create plan; no API calls.",
+    )
+    args = parser.parse_args(argv)
+    return run(dry_run=args.dry_run)
+
+
+if __name__ == "__main__":  # pragma: no cover
+    sys.exit(main())

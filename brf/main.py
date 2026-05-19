@@ -1,15 +1,21 @@
 """brf — CLI bundle for the Blog Research Feed Managed Agent.
 
-Each subcommand is invoked in two contexts:
+This package is a pure **tool CLI** used by the agent inside its Managed
+Agents container via bash. It knows nothing about Managed Agents, sessions,
+or the Anthropic SDK — it just fetches things and emits JSON.
 
-* By the agent itself, inside its Managed Agents container via bash
-  (`brf fetch rss --since YYYY-MM-DD | jq ...`). The CLI auto-loads secrets
-  from `/workspace/.env` mounted by the orchestrator at session-create time.
-* Locally, for smoke-testing without going through the agent loop
-  (`brf firecrawl scrape --url https://...` after `cp .env.example .env`).
+Two invocation contexts:
 
-`brf daily` is the orchestrator entry point: it builds the .env payload,
-uploads it via Files API, creates a session, streams events, and exits.
+* Inside the agent's session container: ``brf fetch rss --since … | jq …``.
+  The CLI auto-loads secrets from ``/workspace/.env`` (mounted by the
+  orchestrator at session-create time) via ``brf.config``.
+* Locally, for smoke-testing without going through the agent loop. Set the
+  same env vars in your shell or a local ``.env``.
+
+The cron-side orchestrator that creates the Managed Agent session and
+manages the SSE event stream lives in the separate ``orchestrator``
+package (``python -m orchestrator.daily``). The two are intentionally
+decoupled — ``brf`` does not import from ``orchestrator`` and vice versa.
 """
 from __future__ import annotations
 
@@ -152,29 +158,6 @@ def report_slack(webhook_env, message_file):
     blocks = markdown_to_blocks(text)
     result = post_blocks(blocks, webhook_env=webhook_env)
     emit_json(result)
-
-
-# ---------------------------------------------------------------------------
-# daily
-# ---------------------------------------------------------------------------
-@cli.command("daily")
-@click.option("--dry-run", is_flag=True, default=False,
-              help="Run the orchestration loop without posting side effects.")
-def daily(dry_run):
-    """Daily orchestrator.
-
-    Builds a `.env` payload from PASSTHROUGH_KEYS in the runner's env,
-    uploads it via Files API, creates a Managed Agent session that mounts
-    it at `/workspace/.env`, streams events for logging, and exits when
-    the session goes idle (after having seen at least one running transition)
-    or terminates. Best-effort deletes the uploaded file on clean exit.
-
-    All the agent's real work happens via bash + `brf` CLI inside the
-    container — no custom-tool dispatch on this side.
-    """
-    from .daily import run as run_daily
-
-    run_daily(dry_run=dry_run)
 
 
 if __name__ == "__main__":  # pragma: no cover

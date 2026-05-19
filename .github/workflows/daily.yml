@@ -27,19 +27,24 @@ jobs:
       - name: Pin build tools (feedparser/sgmllib3k needs setuptools<72)
         run: pip install --upgrade "setuptools<72" wheel
 
-      - name: Install brf
+      - name: Install orchestrator + brf
         run: pip install -e .
 
       - name: Run daily curator
         env:
+          # Anthropic creds — orchestrator uses these to call sessions/files API.
+          # NOT forwarded into the container (the agent doesn't recurse into
+          # the API from inside its own session).
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           ANTHROPIC_AGENT_ID: ${{ secrets.ANTHROPIC_AGENT_ID }}
           ANTHROPIC_ENV_ID: ${{ secrets.ANTHROPIC_ENV_ID }}
+          # Container-bound — orchestrator builds these into the uploaded .env
+          # at session-create time (see orchestrator/daily.py PASSTHROUGH_KEYS).
           FIRECRAWL_API_KEY: ${{ secrets.FIRECRAWL_API_KEY }}
           X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        run: python -m brf daily
+        run: python -m orchestrator.daily
 
       - name: Upload logs on failure
         if: failure()

@@ -17,7 +17,7 @@ bash directly, piping subcommands through `jq`.
  GitHub Actions cron (09:00 UTC daily)
         │
         ▼
- .github/workflows/daily.yml  ─▶  `python -m brf daily`  (orchestrator on runner)
+ .github/workflows/daily.yml  ─▶  `python -m orchestrator.daily`  (orchestrator on runner)
                                        │
                                        │ 1. build .env payload from runner env
                                        │ 2. client.beta.files.upload(.env)
@@ -72,7 +72,7 @@ bash directly, piping subcommands through `jq`.
   - Every subcommand prints JSON to stdout, errors to stderr, non-zero exit
     on failure → pipes cleanly with `jq` and `|`.
 
-- **Cron orchestrator** (`brf/daily.py`, ~150 lines)
+- **Cron orchestrator** (`orchestrator/daily.py`, ~150 lines)
   - Per run: build `.env` payload from `PASSTHROUGH_KEYS`, upload via Files
     API, create session with `resources=[file mount @ /workspace/.env]`,
     send kickoff `user.message`, stream events for logging, delete the file
@@ -83,7 +83,7 @@ bash directly, piping subcommands through `jq`.
 - **GitHub Action** (`.github/workflows/daily.yml`)
   - `cron: "0 9 * * *"` + `workflow_dispatch:` for manual.
   - Pulls all 7 secrets from GitHub Secrets into the runner's env.
-  - Runs `python -m brf daily`.
+  - Runs `python -m orchestrator.daily`.
 
 ## 3. Secrets model (and the tradeoff vs v0)
 
@@ -154,7 +154,7 @@ agent ergonomics + ~200 fewer lines of code.
 | `OPENAI_API_KEY` | ✅ | ❌ | ✅ |
 | `SLACK_WEBHOOK_URL` | ✅ | ❌ | ✅ |
 
-`PASSTHROUGH_KEYS` in `brf/daily.py` is the source of truth for the
+`PASSTHROUGH_KEYS` in `orchestrator/daily.py` is the source of truth for the
 container set. Adding a new key requires (a) adding it to that tuple and
 (b) ensuring the corresponding `brf` subcommand reads it via `get_env(...)`
 from `brf/config.py`.

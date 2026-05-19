@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "blog-research-feed"
 version = "0.1.0"
-description = "AI-news aggregation CLI used as a custom-tool dispatcher for a Managed Agent."
+description = "AI-news aggregation: the `brf` tool CLI (agent-side) plus the `orchestrator` package (host-side cron + Slack receiver)."
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "Blog Research Feed" }]
@@ -26,4 +26,4 @@ dependencies = [
 brf = "brf.main:cli"
 
 [tool.setuptools.packages.find]
-include = ["brf*"]
+include = ["brf*", "orchestrator*"]
