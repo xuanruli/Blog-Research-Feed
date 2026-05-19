@@ -6,18 +6,30 @@ agent 自己决定哪些深挖、写报告，最后发 Slack。
 
 ## 架构（一句话版）
 
-reasoning 在 Anthropic 云端跑，所有副作用（包含 API key 的 I/O）在 GitHub
-Action runner 上跑。详细 ASCII 图见 [`ARCHITECTURE.md`](./ARCHITECTURE.md)。
+`brf` CLI 在容器内预装（via environment pip packages），secret 通过 Files
+API 每次 session 上传一个临时 `.env` 挂到 `/workspace/.env`，agent 用
+`bash + brf | jq | brf` pipeline 自己干活。详细 ASCII 图见
+[`ARCHITECTURE.md`](./ARCHITECTURE.md)。
 
 ```
  GitHub Action (cron 09:00 UTC)
    ↓ python -m brf daily
- Anthropic Managed Agents session
-   ↓ agent.custom_tool_use SSE events
- brf CLI dispatches → fetch_rss / firecrawl_scrape / fetch_x_user / …
-   ↓ user.custom_tool_result
- Agent loops, eventually calls post_to_slack(report) once → done
+ Orchestrator:
+   1. build .env payload from host env vars
+   2. files.upload(.env)
+   3. sessions.create(resources=[file mount at /workspace/.env])
+   4. stream events for logs, exit on idle/terminated
+   5. files.delete(uploaded .env)
+ Inside container (Anthropic cloud):
+   $ brf fetch rss --since YESTERDAY > /tmp/rss.json
+   $ brf firecrawl scrape --url <interesting> > /tmp/scrape.json
+   $ brf report slack --message-file /tmp/report.md
 ```
+
+**v0 → v1 重构**：从 7 个 custom tool + orchestrator dispatch 改成 CLI +
+bash pipe + Files API secret mount。优势：agent 能 `brf | jq | brf` 组合，
+不用每个 tool call 一次往返 host。代价：secret 在容器里（依赖容器隔离 +
+prompt injection 防御，权衡见 ARCHITECTURE §3）。
 
 ## 仓库导览
 
@@ -25,7 +37,7 @@ Action runner 上跑。详细 ASCII 图见 [`ARCHITECTURE.md`](./ARCHITECTURE.md
 |---|---|
 | `brf/` | CLI bundle (`pip install -e .` → `brf` 命令) |
 | `brf/main.py` | Click 入口，子命令 `fetch` / `firecrawl` / `report` / `daily` |
-| `brf/daily.py` | Cron 端编排器：开 session、流式监听、dispatch custom tools |
+| `brf/daily.py` | Cron 端编排器：上传 .env via Files API、开 session、流式日志 |
 | `brf/rss.py` | feedparser + sources.opml，跳过 SOURCES_HEALTH 标记的死链 |
 | `brf/x_client.py` | X API v2，优雅处理 402 no_credits |
 | `brf/firecrawl_client.py` | Firecrawl SDK v2 scrape/search |
@@ -61,8 +73,11 @@ python scripts/create_agent.py
 ```
 
 它会：
-1. 调用 `client.beta.environments.create()` 创建 cloud 环境
-2. 调用 `client.beta.agents.create()` 注册 agent + 7 个 custom tools
+1. 调用 `client.beta.environments.create()` 创建 cloud 环境（带 pip
+   install `brf` from git + apt jq/ffmpeg）— 这一步在 Anthropic 那边
+   build container image，会比较慢（30s-2min）
+2. 调用 `client.beta.agents.create()` 注册 agent（system prompt + 内置
+   toolset，**无 custom tool**）
 3. 打印两行到 stdout：
    ```
    ANTHROPIC_AGENT_ID=agent_...
@@ -76,8 +91,11 @@ python scripts/create_agent.py
 ### 3. 配 GitHub Secrets
 
 仓库 Settings → Secrets → Actions，加 7 个：
-- `ANTHROPIC_API_KEY` · `ANTHROPIC_AGENT_ID` · `ANTHROPIC_ENV_ID`
-- `FIRECRAWL_API_KEY` · `X_BEARER_TOKEN` · `OPENAI_API_KEY` · `SLACK_WEBHOOK_URL`
+- `ANTHROPIC_API_KEY` · `ANTHROPIC_AGENT_ID` · `ANTHROPIC_ENV_ID` —
+  这三个 orchestrator 自己用（创建 session、调 Files API）
+- `FIRECRAWL_API_KEY` · `X_BEARER_TOKEN` · `OPENAI_API_KEY` ·
+  `SLACK_WEBHOOK_URL` — 这四个 orchestrator 在每次 run 时打包成 `.env`
+  上传给容器；agent 在容器里 `brf` 自动读 `/workspace/.env`
 
 ### 4. 试跑
 
@@ -128,3 +146,6 @@ python -c "import ast; [ast.parse(open(f).read()) for f in ['brf/main.py']]"
 
 - 2026-05-19 v0：scaffold 完整管线，所有模块已实现 + reviewed。详见
   `HANDOFF.md`（v0 之前的设计决策）和 `SOURCES_HEALTH.md`（源审计）。
+- 2026-05-19 v1：架构重构 — 删除 7 个 custom tool 和 orchestrator dispatch
+  逻辑（~180 行）；改用 Files API mount `.env` 到容器，agent 在 bash 里
+  直接 pipe `brf` CLI。详见 commit message 和 `ARCHITECTURE.md`。

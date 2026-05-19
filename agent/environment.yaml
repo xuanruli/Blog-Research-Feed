@@ -1,5 +1,23 @@
 name: blog-research-feed-env
 config:
   type: cloud
+
   networking:
+    # Agent fetches Firecrawl/X/OpenAI/Slack/RSS sources, so unrestricted.
+    # Could tighten via package_managers_and_custom + allowed_hosts later.
     type: unrestricted
+
+  packages:
+    apt:
+      # ffmpeg: youtube-transcript-api fallback + podcast audio pipeline.
+      - ffmpeg
+      # jq: agent uses it in bash pipelines (`brf fetch rss | jq ...`).
+      - jq
+    pip:
+      # Install the brf CLI from the project repo. Pinned to the dev branch
+      # for now — switch to @main after the first merge.
+      #
+      # NOTE: changing this URL requires creating a *new* environment object
+      # (environments are immutable after create per the docs). The pip build
+      # is cached across sessions that share the same environment.
+      - "git+https://github.com/xuanruli/blog-research-feed.git@claude/test-api-keys-pshaH"
