@@ -31,6 +31,7 @@ import os
 import signal
 import sys
 import threading
+from pathlib import Path
 from typing import Any, Optional
 
 LOG = logging.getLogger("orchestrator.daily")
@@ -52,6 +53,12 @@ CONTAINER_ENV_PATH = "/workspace/.env"
 # managed-agents-2026-04-01 because we're using files in a Managed Agents
 # context (per docs/managed_agents/files.md).
 FILES_BETAS = ["managed-agents-2026-04-01", "files-api-2025-04-14"]
+
+# Path to the project root (where agent/*.yaml lives) — repo root.
+# orchestrator/daily.py → project root is parent of parent.
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+AGENT_YAML_PATH = _PROJECT_ROOT / "agent" / "agent.yaml"
+ENV_YAML_PATH = _PROJECT_ROOT / "agent" / "environment.yaml"
 
 
 # ---------------------------------------------------------------------------
@@ -151,6 +158,65 @@ def _try_delete_file(client: Any, file_id: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Resolve agent + environment by name (look up at runtime instead of
+# requiring users to store the auto-generated IDs as secrets).
+# ---------------------------------------------------------------------------
+def _read_yaml_name(path: Path) -> str:
+    """Read the top-level ``name:`` field from a yaml file."""
+    import yaml  # local import — kept off the dry-run-only hot path
+
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise RuntimeError(
+            f"Expected {path} (this orchestrator runs from the repo root)."
+        ) from exc
+    name = (data or {}).get("name")
+    if not name:
+        raise RuntimeError(f"{path} is missing a top-level 'name:' field.")
+    return name
+
+
+def _find_active_by_name(items: Any, name: str) -> Any:
+    """Pick the unique non-archived item matching ``name`` from an SDK list page.
+
+    Raises if zero matches (caller should provision) or more than one
+    (caller has a stale duplicate to clean up).
+    """
+    matches = [
+        x
+        for x in items
+        if getattr(x, "name", None) == name
+        and getattr(x, "archived_at", None) is None
+    ]
+    if not matches:
+        raise RuntimeError(
+            f"No active resource named {name!r}. "
+            "Run `python scripts/create_agent.py` to provision."
+        )
+    if len(matches) > 1:
+        ids = ", ".join(getattr(m, "id", "?") for m in matches)
+        raise RuntimeError(
+            f"Multiple active resources named {name!r} ({ids}). "
+            "Archive the stale ones."
+        )
+    return matches[0]
+
+
+def _resolve_agent_and_env(client: Any) -> tuple[str, str]:
+    """Return (agent_id, env_id) by looking them up by name."""
+    agent_name = _read_yaml_name(AGENT_YAML_PATH)
+    env_name = _read_yaml_name(ENV_YAML_PATH)
+    LOG.info("resolving agent=%r env=%r by name", agent_name, env_name)
+
+    agent = _find_active_by_name(client.beta.agents.list(), agent_name)
+    env = _find_active_by_name(client.beta.environments.list(), env_name)
+
+    LOG.info("resolved agent.id=%s env.id=%s", agent.id, env.id)
+    return agent.id, env.id
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 def run(dry_run: bool = False) -> int:
@@ -158,17 +224,16 @@ def run(dry_run: bool = False) -> int:
     today = _dt.date.today().isoformat()
     yesterday = (_dt.date.today() - _dt.timedelta(days=1)).isoformat()
 
-    agent_id = _get_env("ANTHROPIC_AGENT_ID", required=not dry_run)
-    env_id = _get_env("ANTHROPIC_ENV_ID", required=not dry_run)
     _get_env("ANTHROPIC_API_KEY", required=not dry_run)
 
     env_payload = _build_env_payload()
     LOG.info("env payload: %d bytes", len(env_payload))
 
     if dry_run:
+        # Read names but don't hit the API.
         plan = {
-            "agent": agent_id,
-            "environment_id": env_id,
+            "agent_name": _read_yaml_name(AGENT_YAML_PATH),
+            "env_name": _read_yaml_name(ENV_YAML_PATH),
             "today": today,
             "yesterday": yesterday,
             "env_keys": [k for k in PASSTHROUGH_KEYS if os.environ.get(k)],
@@ -181,6 +246,7 @@ def run(dry_run: bool = False) -> int:
     from anthropic import Anthropic
 
     client = Anthropic()
+    agent_id, env_id = _resolve_agent_and_env(client)
 
     LOG.info("uploading env payload to Files API")
     uploaded = _upload_env_file(client, env_payload)

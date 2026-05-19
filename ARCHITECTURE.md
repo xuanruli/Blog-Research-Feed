@@ -147,12 +147,18 @@ agent ergonomics + ~200 fewer lines of code.
 | Var | Lives in GitHub Secrets | Used by orchestrator | Forwarded to container `.env` |
 |---|:-:|:-:|:-:|
 | `ANTHROPIC_API_KEY` | ✅ | ✅ (create session, upload file) | ❌ |
-| `ANTHROPIC_AGENT_ID` | ✅ | ✅ | ❌ |
-| `ANTHROPIC_ENV_ID` | ✅ | ✅ | ❌ |
 | `FIRECRAWL_API_KEY` | ✅ | ❌ | ✅ |
 | `X_BEARER_TOKEN` | ✅ | ❌ | ✅ |
 | `OPENAI_API_KEY` | ✅ | ❌ | ✅ |
 | `SLACK_WEBHOOK_URL` | ✅ | ❌ | ✅ |
+
+`ANTHROPIC_AGENT_ID` and `ANTHROPIC_ENV_ID` are **NOT** stored as
+secrets — `orchestrator.daily` resolves them at runtime by `name` (from
+`agent/agent.yaml` and `agent/environment.yaml`) via
+`client.beta.agents.list()` + `environments.list()`. This means rebuilding
+the environment (e.g. for a new pip dep) requires zero secret updates —
+`scripts/create_agent.py` archives the old env and creates a new one with
+the same `name`, and the orchestrator picks it up on the next run.
 
 `PASSTHROUGH_KEYS` in `orchestrator/daily.py` is the source of truth for the
 container set. Adding a new key requires (a) adding it to that tuple and
@@ -187,6 +193,8 @@ from `brf/config.py`.
 - **First-run env build cost** — `pip install git+...` in environment is
   cached but the first session creation has 30s-2min container build
   latency. Subsequent runs reuse the cached image.
-- **Bumping CLI** — to deploy a new `brf` version, push to the branch, then
-  rerun `scripts/create_agent.py --update` to register a fresh environment
-  (immutable post-create), and update `ANTHROPIC_ENV_ID` secret.
+- **Bumping CLI** — to deploy a new `brf` version, push to `main`, then
+  rerun `scripts/create_agent.py` to register a fresh environment
+  (immutable post-create). The orchestrator looks up the env by `name`
+  at runtime, so **you do NOT need to update any GitHub Secret** —
+  next cron run automatically uses the new env.

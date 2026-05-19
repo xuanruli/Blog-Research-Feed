@@ -32,12 +32,11 @@ jobs:
 
       - name: Run daily curator
         env:
-          # Anthropic creds — orchestrator uses these to call sessions/files API.
-          # NOT forwarded into the container (the agent doesn't recurse into
-          # the API from inside its own session).
+          # Anthropic API key — used by orchestrator to call sessions/files
+          # API. The agent + environment IDs are resolved at runtime by
+          # `name` (see orchestrator/daily.py _resolve_agent_and_env) so
+          # you only need ANTHROPIC_API_KEY here.
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          ANTHROPIC_AGENT_ID: ${{ secrets.ANTHROPIC_AGENT_ID }}
-          ANTHROPIC_ENV_ID: ${{ secrets.ANTHROPIC_ENV_ID }}
           # Container-bound — orchestrator builds these into the uploaded .env
           # at session-create time (see orchestrator/daily.py PASSTHROUGH_KEYS).
           FIRECRAWL_API_KEY: ${{ secrets.FIRECRAWL_API_KEY }}
