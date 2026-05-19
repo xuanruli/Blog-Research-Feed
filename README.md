@@ -79,24 +79,23 @@ python scripts/create_agent.py
    build container image，会比较慢（30s-2min）
 2. 调用 `client.beta.agents.create()` 注册 agent（system prompt + 内置
    toolset，**无 custom tool**）
-3. 打印两行到 stdout：
-   ```
-   ANTHROPIC_AGENT_ID=agent_...
-   ANTHROPIC_ENV_ID=env_...
-   ```
-
-把这两个值加到 `.env` 和 GitHub Repository Secrets。
+3. 打印 agent_id + env_id 到 stdout —— **这俩 ID 你不用动**，orchestrator
+   每次启动时按 `name`（来自 `agent/agent.yaml` / `environment.yaml`）
+   到 Anthropic API 查实时 ID
 
 需要改 agent 配置时重跑 `python scripts/create_agent.py --update`（创建新版本）。
+改 environment.yaml（加包等）会自动建新 env —— orchestrator 下次跑就用新的，
+不需要更新任何 secret。
 
 ### 3. 配 GitHub Secrets
 
-仓库 Settings → Secrets → Actions，加 7 个：
-- `ANTHROPIC_API_KEY` · `ANTHROPIC_AGENT_ID` · `ANTHROPIC_ENV_ID` —
-  这三个 orchestrator 自己用（创建 session、调 Files API）
+仓库 Settings → Secrets → Actions，加 **5 个**：
+- `ANTHROPIC_API_KEY` — orchestrator 用来调 sessions/files API
 - `FIRECRAWL_API_KEY` · `X_BEARER_TOKEN` · `OPENAI_API_KEY` ·
-  `SLACK_WEBHOOK_URL` — 这四个 orchestrator 在每次 run 时打包成 `.env`
+  `SLACK_WEBHOOK_URL` — 这 4 个 orchestrator 在每次 run 时打包成 `.env`
   上传给容器；agent 在容器里 `brf` 自动读 `/workspace/.env`
+
+（agent_id / env_id **不用配** — 按 yaml 里的 `name:` 查表得来）
 
 ### 4. 试跑
 
