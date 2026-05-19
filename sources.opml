@@ -90,26 +90,19 @@
 
     <outline text="News aggregators - English">
       <outline text="AI News by smol.ai" type="rss" xmlUrl="https://buttondown.com/ainews/rss" htmlUrl="https://news.smol.ai"/>
-      <outline text="The Batch (Andrew Ng)" type="rss" xmlUrl="https://www.deeplearning.ai/the-batch/feed/" htmlUrl="https://www.deeplearning.ai/the-batch"/>
+      <outline text="The Batch (Andrew Ng) - Research/letter only" type="rss" xmlUrl="https://www.deeplearning.ai/the-batch/feed/" htmlUrl="https://www.deeplearning.ai/the-batch"/>
       <outline text="Import AI (Jack Clark)" type="rss" xmlUrl="https://jack-clark.net/feed/" htmlUrl="https://jack-clark.net/"/>
-      <outline text="TLDR AI" type="rss" xmlUrl="https://tldr.tech/api/rss/ai" htmlUrl="https://tldr.tech/ai"/>
       <outline text="TheSequence" type="rss" xmlUrl="https://thesequence.substack.com/feed" htmlUrl="https://thesequence.substack.com/"/>
       <outline text="HF Daily Papers" type="rss" xmlUrl="https://jamesg.blog/hf-papers.xml" htmlUrl="https://huggingface.co/papers"/>
-      <outline text="Hacker News front page" type="rss" xmlUrl="https://news.ycombinator.com/rss" htmlUrl="https://news.ycombinator.com"/>
-      <outline text="r/LocalLLaMA" type="rss" xmlUrl="https://www.reddit.com/r/LocalLLaMA/.rss" htmlUrl="https://reddit.com/r/LocalLLaMA"/>
-      <outline text="Stratechery" type="rss" xmlUrl="https://stratechery.com/feed/" htmlUrl="https://stratechery.com/"/>
-      <outline text="The Pragmatic Engineer" type="rss" xmlUrl="https://newsletter.pragmaticengineer.com/feed" htmlUrl="https://newsletter.pragmaticengineer.com/"/>
-      <outline text="Marginal Revolution" type="rss" xmlUrl="https://marginalrevolution.com/feed" htmlUrl="https://marginalrevolution.com/"/>
+      <outline text="r/LocalLLaMA - filter score>=50" type="rss" xmlUrl="https://www.reddit.com/r/LocalLLaMA/.rss" htmlUrl="https://reddit.com/r/LocalLLaMA"/>
+      <outline text="The Pragmatic Engineer - AI keyword filter" type="rss" xmlUrl="https://newsletter.pragmaticengineer.com/feed" htmlUrl="https://newsletter.pragmaticengineer.com/"/>
     </outline>
 
     <outline text="News aggregators - Chinese">
       <outline text="机器之心" type="rss" xmlUrl="https://www.jiqizhixin.com/rss" htmlUrl="https://www.jiqizhixin.com"/>
-      <outline text="量子位 QbitAI" type="rss" xmlUrl="https://www.qbitai.com/feed" htmlUrl="https://www.qbitai.com"/>
-      <outline text="新智元 AI Era" type="rss" xmlUrl="https://aiera.com.cn/feed" htmlUrl="https://aiera.com.cn"/>
-      <outline text="智东西 Zhidx" type="rss" xmlUrl="https://zhidx.com/feed" htmlUrl="https://zhidx.com"/>
-      <outline text="极客公园" type="rss" xmlUrl="https://www.geekpark.net/rss" htmlUrl="https://www.geekpark.net"/>
-      <outline text="InfoQ 中文" type="rss" xmlUrl="https://feed.infoq.cn" htmlUrl="https://www.infoq.cn"/>
-      <outline text="36氪" type="rss" xmlUrl="https://36kr.com/feed" htmlUrl="https://36kr.com"/>
+      <outline text="量子位 QbitAI - filter 融资/裁员/IPO" type="rss" xmlUrl="https://www.qbitai.com/feed" htmlUrl="https://www.qbitai.com"/>
+      <outline text="新智元 AI Era - filter 融资/裁员/IPO" type="rss" xmlUrl="https://aiera.com.cn/feed" htmlUrl="https://aiera.com.cn"/>
+      <outline text="InfoQ 中文 - AI/LLM/Agent tag whitelist" type="rss" xmlUrl="https://feed.infoq.cn" htmlUrl="https://www.infoq.cn"/>
     </outline>
 
     <outline text="Podcasts">

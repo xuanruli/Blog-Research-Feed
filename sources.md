@@ -210,40 +210,30 @@
 
 ## 八、新闻聚合源
 
+> 已剔除：TLDR AI / AlphaSignal / Last Week in AI / Hacker News 全量 / Stratechery / Marginal Revolution（融资+发布会三段式 / 营销 top tools / roundup 重复 / 全站噪音 / 商业战略 / 经济学博客 — 与 AI engineering 实操错位）
+
 ### 英文
 | 名称 | URL | 适合 | 频率 |
 |---|---|---|---|
 | AI News by smol.ai | https://news.smol.ai | 356 X + 21 Discord 每日工程摘要 | 工作日 |
-| The Batch (Andrew Ng) | https://www.deeplearning.ai/the-batch | 周精选 | 周三 |
-| Import AI (Jack Clark) | https://jack-clark.net | 论文 + 政策视角 | 周一 |
-| TLDR AI | https://tldr.tech/ai | 5 分钟头条 | 每日 |
-| AlphaSignal | https://alphasignal.ai | ML 排序的论文 + repo | 每日 + 周报 |
-| TheSequence | https://thesequence.substack.com | 技术深度 | 一周 5 次 |
-| Latent Space | https://latent.space | swyx 长访谈 | 每周 |
-| Last Week in AI | https://lastweekin.ai | 周新闻长音频 | 每周 |
+| The Batch (Andrew Ng) | https://www.deeplearning.ai/the-batch | 周精选（**只取 Research / Andrew's letter 板块**） | 周三 |
+| Import AI (Jack Clark) | https://jack-clark.net | 论文 + 政策视角，每篇带 technical takeaway | 周一 |
+| TheSequence | https://thesequence.substack.com | RAG/agent/eval/MoE 技术深度 | 一周 5 次 |
 | HF Daily Papers | https://huggingface.co/papers | AK 手选 arXiv | 工作日 |
-| Hacker News | https://news.ycombinator.com | 病毒发布信号 | 实时 |
-| r/LocalLLaMA | https://reddit.com/r/LocalLLaMA | 开源模型最大社区 | 实时 |
-| Stratechery | https://stratechery.com | Ben Thompson 战略（付费） | 一周 4 次 |
-| The Pragmatic Engineer | https://newsletter.pragmaticengineer.com | coding-agent 视角 | 每周 |
-| Marginal Revolution | https://marginalrevolution.com | Tyler Cowen | 每天多条 |
+| r/LocalLLaMA | https://reddit.com/r/LocalLLaMA | 本地推理/微调/量化实操（**需 reddit score ≥ 50 过滤**） | 实时 |
+| The Pragmatic Engineer | https://newsletter.pragmaticengineer.com | coding-agent 视角（**AI 占比低，需关键词白名单**） | 每周 |
+
+> 已剔除：智东西 / 极客公园 / 硅星人 / 36氪 / AI 科技评论 / 深科技 / Founder Park（硬件政策 / 创业访谈 / 大厂公关 / 创投融资 / 公司动态 / 科普商业 / 微信无 RSS — 全部与 hands-on 错位）
 
 ### 中文
 | 名称 | URL / 微信 | 适合 | 频率 |
 |---|---|---|---|
-| 机器之心 | https://www.jiqizhixin.com | 论文深度 + 前沿研究 | 每天多条 |
-| 量子位 QbitAI | https://www.qbitai.com | 最快最爆款，模型发布 | 每天多条 |
-| 新智元 AI Era | https://aiera.com.cn | 长文、峰会 | 每天多条 |
-| 智东西 Zhidx | https://zhidx.com | 硬件 / 芯片 / 机器人 | 每天 |
-| 极客公园 | https://www.geekpark.net | 产品 / 创始人访谈 | 每天 |
-| InfoQ 中文 | https://www.infoq.cn | 工程向 + AICon | 每天 |
-| 深科技 (MIT TR China) | https://www.mittrchina.com | MIT Tech Review 中文 | 一周几次 |
-| 夕小瑶科技说 | 微信 `xixiaoyaoQAQ` | LLM 研究员 / 工程师向 | 每天 |
-| PaperWeekly | https://www.paperweekly.site | NLP / LLM / CV 论文笔记 | 每天 |
-| AI 科技评论 | https://www.leiphone.com/category/ai | 中国 AI 研究员深访 | 每天 |
-| 硅星人 | https://www.guixingren.com | 硅谷动态中文报道 | 每天 |
-| 36氪 AI | https://36kr.com/motif/327686782977 | 创投 / 融资 | 每天多条 |
-| Founder Park | 微信 `Founder-Park` | AI 创业访谈 | 一周几次 |
+| 机器之心 | https://www.jiqizhixin.com | 论文深度 + 前沿研究 + 模型技术报告解读 | 每天多条 |
+| PaperWeekly | https://www.paperweekly.site | NLP / LLM / CV 论文精读，零 PR | 每天 |
+| 量子位 QbitAI | https://www.qbitai.com | 模型/论文解读混发布会通稿（**过滤 融资/估值/裁员/IPO/CEO 关键词**） | 每天多条 |
+| 新智元 AI Era | https://aiera.com.cn | arXiv 解读 + 标题党行业八卦混合（**同上关键词过滤**） | 每天多条 |
+| InfoQ 中文 | https://www.infoq.cn | 工程深度（QCon/字节美团 LLM 实践，**需 AI/LLM/Agent/RAG 标签白名单**，否则混入 Java/DevOps） | 每天 |
+| 夕小瑶科技说 | 微信 `xixiaoyaoQAQ` | LLM 研究员向（**无公开 RSS，需 WeRSS 桥接；不稳就 DROP**） | 每天 |
 
 ---
 
