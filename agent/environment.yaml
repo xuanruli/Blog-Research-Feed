@@ -1,4 +1,4 @@
-name: blog-research-feed-env-v2  # v2: pin setuptools<72, install brf from @main
+name: blog-research-feed-env-v3  # v3: install brf from PyPI (git URL silently failed in v2)
 config:
   type: cloud
 
@@ -14,15 +14,23 @@ config:
       # jq: agent uses it in bash pipelines (`brf fetch rss | jq ...`).
       - jq
     pip:
-      # IMPORTANT: pin setuptools < 72 BEFORE installing brf — feedparser's
-      # transitive dep sgmllib3k won't build with newer setuptools. Order
-      # matters: pip processes this list left-to-right.
+      # Pin setuptools<72 first — feedparser's transitive dep sgmllib3k
+      # won't build with newer setuptools. (Even though brf is now installed
+      # as a wheel from PyPI, sgmllib3k is still sdist-only and gets built
+      # at install time.)
       - "setuptools<72"
       - "wheel"
-      # Install the brf CLI from the project repo. Pinned to the dev branch
-      # for now — switch to @main after the first merge.
+      # Install brf from PyPI. Published from this repo via
+      # `python -m build && twine upload dist/*`.
       #
-      # NOTE: changing this URL requires creating a *new* environment object
-      # (environments are immutable after create per the docs). The pip build
-      # is cached across sessions that share the same environment.
-      - "git+https://github.com/xuanruli/blog-research-feed.git@main"
+      # Switched from `git+https://github.com/.../blog-research-feed.git@main`
+      # because the git URL install silently failed in v1/v2 envs (env-build
+      # logs not exposed by Anthropic, so we couldn't debug).
+      #
+      # To deploy a new brf version:
+      #   1. bump `version` in pyproject.toml
+      #   2. `python -m build && twine upload dist/*`
+      #   3. bump the pin below to the new version
+      #   4. bump this env's `name:` (v3 → v4) and re-run scripts/create_agent.py
+      #   5. orchestrator picks up the new env by name on next cron run
+      - "blog-research-feed==0.1.0"
