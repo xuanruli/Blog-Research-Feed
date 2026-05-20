@@ -1,4 +1,4 @@
-name: blog-research-feed-env-v6  # v6: brf 0.1.4 (FIRECRAWL_FALLBACK_FEEDS for jiqizhixin/HF Papers/LangChain; YouTube Whisper fallback; Matt Pocock added; 36氪 dropped)
+name: blog-research-feed-env-v7  # v7: brf 0.1.4 — config.py auto-loads /mnt/session/uploads/workspace/.env (Managed Agents mount prefix). v6 shipped FIRECRAWL_FALLBACK_FEEDS / YouTube Whisper / Matt Pocock.
 config:
   type: cloud
 

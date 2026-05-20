@@ -1,10 +1,18 @@
 """Environment/config loading for the brf CLI.
 
 Auto-loads .env from (in order, first hit wins):
+
 1. ``BRF_ENV_FILE`` env var (explicit override)
-2. ``/workspace/.env`` — container path (mounted by daily.py via Files API)
-3. ``./.env`` — current working directory (local dev)
-4. walking up from this file's directory (running from inside the repo)
+2. ``/mnt/session/uploads/workspace/.env`` — Managed Agents container path.
+   Anthropic prefixes our session-resource ``mount_path`` with
+   ``/mnt/session/uploads/`` (documented behavior; verified in run #3
+   where the agent had to ``set -a; . /mnt/session/uploads/workspace/.env``
+   to load the secrets that orchestrator uploaded).
+3. ``/workspace/.env`` — alternate container path (defensive; what we set
+   as ``mount_path`` in ``sessions.create``, kept as fallback in case
+   Anthropic stops prefixing).
+4. ``./.env`` — current working directory (local dev).
+5. Walking up from this file's directory (handy when running from src).
 """
 from __future__ import annotations
 
@@ -14,6 +22,9 @@ from typing import Optional
 
 from dotenv import load_dotenv
 
+# Anthropic Managed Agents mounts session file resources under
+# /mnt/session/uploads/ regardless of the mount_path we request.
+_MANAGED_AGENT_MOUNT = Path("/mnt/session/uploads/workspace/.env")
 _CONTAINER_PATH = Path("/workspace/.env")
 
 
@@ -22,6 +33,7 @@ def _candidate_paths() -> list[Path]:
     explicit = os.environ.get("BRF_ENV_FILE")
     if explicit:
         paths.append(Path(explicit))
+    paths.append(_MANAGED_AGENT_MOUNT)
     paths.append(_CONTAINER_PATH)
     paths.append(Path.cwd() / ".env")
     # Walk up from this file looking for .env (handy when running from src)
