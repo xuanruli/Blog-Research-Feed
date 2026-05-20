@@ -168,20 +168,26 @@ def report_slack(webhook_env, message_file):
 def _build_aggregator(output_dir):
     """Construct the FeedAggregator with all registered fetchers.
 
-    Phase 1 returns an aggregator with ZERO fetchers — it writes an empty
-    index.json so callers don't crash, but no source data is pulled.
-    Phase 2+ adds RssFetcher / XFetcher / YouTubeFetcher /
-    PodcastFetcher / FirecrawlIndexFetcher one at a time.
+    Phase 2: RssFetcher registered. Phase 3+ adds XFetcher / YouTubeFetcher
+    / PodcastFetcher / FirecrawlIndexFetcher one at a time.
     """
     from pathlib import Path
 
     from .aggregator import FeedAggregator
+    from .fetchers.rss import RssFetcher
+    from .sources_config import active_rss_feeds, load_sources
 
-    fetchers: list = []
-    # Phase 2+: append fetcher instances here, e.g.:
-    #     fetchers.append(RssFetcher(cfg["rss"], output_dir=output_dir))
+    output_dir = Path(output_dir)
+    cfg = load_sources()
+    fetchers: list = [
+        RssFetcher(feeds=active_rss_feeds(cfg), output_dir=output_dir),
+    ]
+    # Phase 3+: append fetcher instances here, e.g.:
     #     fetchers.append(XFetcher(cfg["x"]["handles"]))
-    return FeedAggregator(fetchers, output_dir=Path(output_dir))
+    #     fetchers.append(YouTubeFetcher(cfg["youtube"]["channels"]))
+    #     fetchers.append(PodcastFetcher(active_podcast_feeds(cfg)))
+    #     fetchers.append(FirecrawlIndexFetcher(cfg["firecrawl_index"]))
+    return FeedAggregator(fetchers, output_dir=output_dir)
 
 
 @cli.command("fetch-all")
