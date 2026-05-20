@@ -160,5 +160,66 @@ def report_slack(webhook_env, message_file):
     emit_json(result)
 
 
+# ---------------------------------------------------------------------------
+# fetch-all / fetch-full — unified entry points (Phase 1 scaffolding;
+# behavior wired up in Phase 2+).
+# See BRF_FETCHER_DESIGN.md §4.
+# ---------------------------------------------------------------------------
+def _build_aggregator(output_dir):
+    """Construct the FeedAggregator with all registered fetchers.
+
+    Phase 1 returns an aggregator with ZERO fetchers — it writes an empty
+    index.json so callers don't crash, but no source data is pulled.
+    Phase 2+ adds RssFetcher / XFetcher / YouTubeFetcher /
+    PodcastFetcher / FirecrawlIndexFetcher one at a time.
+    """
+    from pathlib import Path
+
+    from .aggregator import FeedAggregator
+
+    fetchers: list = []
+    # Phase 2+: append fetcher instances here, e.g.:
+    #     fetchers.append(RssFetcher(cfg["rss"], output_dir=output_dir))
+    #     fetchers.append(XFetcher(cfg["x"]["handles"]))
+    return FeedAggregator(fetchers, output_dir=Path(output_dir))
+
+
+@cli.command("fetch-all")
+@click.option("--since", type=click.DateTime(formats=["%Y-%m-%d"]), required=True,
+              help="Only include items published on/after this date (YYYY-MM-DD).")
+@click.option("--output-dir", type=click.Path(file_okay=False), default="/tmp/feed",
+              show_default=True,
+              help="Directory to write index.json + full/<id>.* into.")
+def fetch_all(since, output_dir):
+    """Bulk-fetch all configured sources, write unified index.json.
+
+    Phase 1: writes an empty list. Phase 2+: actual fetcher fan-out.
+    """
+    agg = _build_aggregator(output_dir)
+    items = agg.fetch_all(since)
+    click.echo(f"{len(items)} items written to {output_dir}/index.json",
+               err=True)
+
+
+@cli.command("fetch-full")
+@click.option("--id", "item_id", type=str, required=True,
+              help="FeedItem id (from index.json).")
+@click.option("--output-dir", type=click.Path(file_okay=False), default="/tmp/feed",
+              show_default=True,
+              help="Directory containing index.json + full/.")
+@click.option("--force", is_flag=True, default=False,
+              help="Re-fetch even if the body file already exists.")
+def fetch_full_cmd(item_id, output_dir, force):
+    """Drill-down on one item by id; dispatches by source_type."""
+    agg = _build_aggregator(output_dir)
+    path = agg.fetch_full(item_id, force=force)
+    if path is None:
+        raise click.ClickException(
+            f"could not fetch full for id={item_id!r} "
+            f"(not in index, no fetcher registered, or content unavailable)"
+        )
+    click.echo(str(path))
+
+
 if __name__ == "__main__":  # pragma: no cover
     cli()
