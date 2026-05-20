@@ -57,17 +57,22 @@ def _parse_index_date(raw: str, fmt: str) -> Optional[datetime]:
     ``2401.12345`` → 2024-01-01. Returns ``None`` on any parse failure.
     """
     if fmt == "yymm":
-        # arXiv id like "2401.12345" → year 2024, month 01
+        # arXiv id like "2401.12345" → year 2024, month 01. The yymm
+        # prefix tells us nothing finer than the month, so stamp the
+        # result at the last day of that month: a paper submitted any
+        # time in May 2026 should pass a `since=2026-05-17` filter,
+        # not be excluded for being "before" the cutoff.
+        import calendar
         s = raw.split(".", 1)[0]
         if len(s) != 4 or not s.isdigit():
             return None
         yy, mm = int(s[:2]), int(s[2:])
         if not 1 <= mm <= 12:
             return None
-        # arXiv started 2007; everything <07 is 20xx-future, otherwise 20xx.
         year = 2000 + yy
+        last_day = calendar.monthrange(year, mm)[1]
         try:
-            return datetime(year, mm, 1, tzinfo=timezone.utc)
+            return datetime(year, mm, last_day, tzinfo=timezone.utc)
         except ValueError:
             return None
     try:
@@ -195,6 +200,11 @@ class FirecrawlIndexFetcher(SourceFetcher):
         for m in _MD_LINK_RE.finditer(markdown):
             link_text = m.group(1).strip()
             url = m.group(2).strip().rstrip(".,;)")
+            # Drop fragment so e.g. /papers/2605.16403 and
+            # /papers/2605.16403#community dedupe to the same item.
+            url = url.split("#", 1)[0]
+            if not url:
+                continue
 
             article_m = pattern.match(url)
             if not article_m:

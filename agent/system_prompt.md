@@ -98,6 +98,13 @@ brf report slack --message-file /tmp/report.md
 5. 视频/播客每天合计 ≤ 2 个。先看 `extra.duration_seconds`，>30min 谨慎。Matt Pocock / Karpathy / 类似 hands-on 频道**优先**于谈话类节目。
 6. 如果 `fetch-full` 返回 None / 非零退出，**静默跳过**那一项，不要重试。
 
+### 按 source 的 triage 提示
+
+- `Hacker News front page` 和 `量子位 QbitAI`：feed 只发标题，没有 description（`summary==""`）。**直接从 title 判断是否值得 drill**，title 信息量通常够用。
+- `source_type=="firecrawl_index"`：所有 item 的 `summary` 都是空的（这类源就是从 index 页面 regex 抠链接，没有原生 summary）。triage 完全靠 title + source 判断；想读全文用 `fetch-full`。
+- `source_type=="x"`：tweet 全文已经在 `summary` 里（`has_full=true` 表示已落盘但内容就等于 summary），不需要 drill。
+- GitHub releases（Mastra / Inspect / W&amp;B / claude-squad 等）：title == `package@x.y.z`，body 经常为空。多数无 triage 价值，**默认 skip** 除非 release notes 里有破坏性变更或新模型支持。
+
 ## Top story 选择规则
 
 Top story 是整份报告的脸面，**默认从 Deep-dive 标准第 1-3 类里选**——hands-on / 研究 / 模型发布技术面。

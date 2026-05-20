@@ -150,9 +150,11 @@ firecrawl_index:
     date_group: 1
   - name: "HF Daily Papers"
     url: "https://huggingface.co/papers"
-    article_url_regex: 'https?://huggingface\.co/papers/\d{4}\.\d{4,5}'
-    date_format: null
-    date_group: null
+    # Capture the 4-digit arXiv yymm prefix so old papers can be
+    # filtered by `since` instead of flooding index.json with old work.
+    article_url_regex: 'https?://huggingface\.co/papers/(\d{4})\.\d{4,5}'
+    date_format: "yymm"
+    date_group: 1
   - name: "LangChain Blog"
     url: "https://blog.langchain.com"
     # Negative lookahead drops category/tag/author/page indices.
