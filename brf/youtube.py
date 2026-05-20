@@ -1,18 +1,28 @@
 """YouTube transcript fetcher.
 
-Extracts the transcript for a YouTube video using youtube-transcript-api,
-and supplements with title/channel metadata via yt-dlp (preferred) or the
-public oEmbed endpoint as a fallback.
+Primary path: youtube-transcript-api against the public caption track.
+Fallback path: yt-dlp downloads bestaudio, then OpenAI Whisper transcribes.
+The fallback is what saves us when YouTube IP-bans the caption endpoint
+(common on cloud egress) or when an uploader disables captions.
+
+Metadata (title / channel / duration) comes from yt-dlp first, oEmbed
+second.
 """
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
+import tempfile
 from typing import Optional
 from urllib.parse import parse_qs, urlparse
 
 import httpx
+
+from .config import get_env
+
+_WHISPER_MAX_BYTES = 25 * 1024 * 1024  # OpenAI Whisper API hard limit
 
 
 _VIDEO_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
@@ -153,17 +163,105 @@ def _fetch_transcript(video_id: str) -> tuple[Optional[str], Optional[str], Opti
         return None, "error", str(e)
 
 
+def _download_audio_ytdlp(url: str, dest_dir: str) -> tuple[Optional[str], Optional[str]]:
+    """Download bestaudio to ``dest_dir``. Returns (path, error_message)."""
+    try:
+        from yt_dlp import YoutubeDL  # type: ignore
+    except Exception as e:
+        return None, f"yt-dlp import failed: {e}"
+
+    outtmpl = os.path.join(dest_dir, "audio.%(ext)s")
+    opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "noplaylist": True,
+        "format": "bestaudio/best",
+        "outtmpl": outtmpl,
+        # Cap download to keep us under the Whisper 25MB ceiling on long videos.
+        # bestaudio is usually m4a/webm; ~50kbps audio = ~25MB for ~70min.
+        "format_sort": ["+size", "+br"],
+    }
+    try:
+        with YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+        if not info:
+            return None, "yt-dlp returned no info"
+        # yt-dlp may have transcoded; locate the resulting file.
+        path = ydl.prepare_filename(info)
+        if not os.path.exists(path):
+            # Fall back to any file in dest_dir.
+            for fname in os.listdir(dest_dir):
+                if fname.startswith("audio."):
+                    path = os.path.join(dest_dir, fname)
+                    break
+        if not os.path.exists(path):
+            return None, "downloaded file not found"
+        return path, None
+    except Exception as e:
+        return None, str(e)
+
+
+def _transcribe_whisper(path: str, api_key: str) -> tuple[Optional[str], Optional[str]]:
+    """POST ``path`` to OpenAI Whisper. Returns (text, error_message)."""
+    try:
+        size = os.path.getsize(path)
+    except OSError as e:
+        return None, f"stat failed: {e}"
+    if size > _WHISPER_MAX_BYTES:
+        return None, f"audio {size} bytes exceeds Whisper {_WHISPER_MAX_BYTES} limit"
+    try:
+        with open(path, "rb") as f:
+            files = {"file": (os.path.basename(path) or "audio.m4a", f, "application/octet-stream")}
+            data = {"model": "whisper-1"}
+            headers = {"Authorization": f"Bearer {api_key}"}
+            r = httpx.post(
+                "https://api.openai.com/v1/audio/transcriptions",
+                headers=headers,
+                files=files,
+                data=data,
+                timeout=600.0,
+            )
+        if r.status_code != 200:
+            return None, f"whisper http {r.status_code}: {r.text[:500]}"
+        text = r.json().get("text")
+        if not text:
+            return None, "whisper returned no text"
+        return text, None
+    except Exception as e:
+        return None, str(e)
+
+
+def _whisper_fallback(url: str) -> tuple[Optional[str], Optional[str]]:
+    """Download audio with yt-dlp and transcribe with Whisper.
+
+    Returns (text, error_message). Caller handles missing API key upstream.
+    """
+    api_key = get_env("OPENAI_API_KEY")
+    if not api_key:
+        return None, "OPENAI_API_KEY not set"
+    with tempfile.TemporaryDirectory(prefix="brf-yt-") as tmp:
+        path, err = _download_audio_ytdlp(url, tmp)
+        if not path:
+            return None, f"download failed: {err}"
+        return _transcribe_whisper(path, api_key)
+
+
 def get_transcript(url: str) -> dict:
     """Fetch a YouTube video's transcript plus metadata.
 
     Returns dict with keys: video_id, title, channel, transcript,
-    duration_seconds, status, error_message.
+    transcript_source, duration_seconds, status, error_message.
+
+    ``transcript_source`` is ``"captions"`` (youtube-transcript-api) or
+    ``"whisper"`` (yt-dlp + OpenAI Whisper) when a transcript was obtained,
+    else ``None``.
     """
     result: dict = {
         "video_id": None,
         "title": None,
         "channel": None,
         "transcript": None,
+        "transcript_source": None,
         "duration_seconds": None,
         "status": "error",
         "error_message": None,
@@ -183,9 +281,32 @@ def get_transcript(url: str) -> dict:
         result["duration_seconds"] = meta.get("duration_seconds")
 
     text, status, err = _fetch_transcript(video_id)
-    result["transcript"] = text
+    if status == "ok" and text:
+        result["transcript"] = text
+        result["transcript_source"] = "captions"
+        result["status"] = "ok"
+        result["error_message"] = None
+        return result
+
+    # Captions path failed. yt-dlp can't recover private/deleted videos,
+    # so skip Whisper for those — they'll just fail the same way.
+    if status == "private_or_deleted":
+        result["status"] = status
+        result["error_message"] = err
+        return result
+
+    whisper_text, whisper_err = _whisper_fallback(url)
+    if whisper_text:
+        result["transcript"] = whisper_text
+        result["transcript_source"] = "whisper"
+        result["status"] = "ok"
+        result["error_message"] = None
+        return result
+
     result["status"] = status or "error"
-    result["error_message"] = err
+    result["error_message"] = (
+        f"captions: {err or 'unknown'}; whisper: {whisper_err or 'unknown'}"
+    )
     return result
 
 
