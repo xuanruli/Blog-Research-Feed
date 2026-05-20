@@ -174,19 +174,21 @@ def _build_aggregator(output_dir):
     from pathlib import Path
 
     from .aggregator import FeedAggregator
+    from .fetchers.podcast import PodcastFetcher
     from .fetchers.rss import RssFetcher
-    from .sources_config import active_rss_feeds, load_sources
+    from .fetchers.x import XFetcher
+    from .fetchers.youtube import YouTubeFetcher
+    from .sources_config import active_podcast_feeds, active_rss_feeds, load_sources
 
     output_dir = Path(output_dir)
     cfg = load_sources()
     fetchers: list = [
         RssFetcher(feeds=active_rss_feeds(cfg), output_dir=output_dir),
+        XFetcher(handles=cfg["x"]["handles"]),
+        YouTubeFetcher(channels=cfg["youtube"]["channels"]),
+        PodcastFetcher(feeds=active_podcast_feeds(cfg)),
     ]
-    # Phase 3+: append fetcher instances here, e.g.:
-    #     fetchers.append(XFetcher(cfg["x"]["handles"]))
-    #     fetchers.append(YouTubeFetcher(cfg["youtube"]["channels"]))
-    #     fetchers.append(PodcastFetcher(active_podcast_feeds(cfg)))
-    #     fetchers.append(FirecrawlIndexFetcher(cfg["firecrawl_index"]))
+    # Phase 4: append FirecrawlIndexFetcher(cfg["firecrawl_index"]) here.
     return FeedAggregator(fetchers, output_dir=output_dir)
 
 

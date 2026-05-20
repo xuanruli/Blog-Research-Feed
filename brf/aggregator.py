@@ -24,16 +24,25 @@ from .feed_item import FeedItem
 from .fetchers.base import SourceFetcher
 
 # When the same URL surfaces from multiple fetchers, higher priority
-# (lower number) wins. Rationale per design doc §3.5:
-# - rss has the richest metadata (published date, content:encoded body)
-# - youtube/podcast carry duration + transcript drill-down
-# - x is summary-complete but has no title
-# - firecrawl_index is the weakest (regex on HTML, may have stale dates
-#   or wrong titles) — only used when nothing else covers the source.
+# (lower number) wins.
+#
+# Priority adjusted from design doc §3.5 after Phase 3 surfaced URL
+# collisions in production:
+# - youtube and podcast now beat rss for URLs they natively own. A
+#   substack URL surfaced by both Latent-Space-blog (rss) and Latent-
+#   Space-podcast (podcast) → podcast wins because the podcast version
+#   carries audio_url for transcript drill-down. A youtube.com URL
+#   referenced from some RSS feed → youtube wins because the YouTube
+#   fetcher has channel_id, duration, and transcript drill-down.
+# - rss still beats x and firecrawl_index because RSS items typically
+#   have published dates and (sometimes) content:encoded bodies that
+#   the lighter sources lack.
+# - firecrawl_index is the weakest (regex-extracted from HTML, no
+#   reliable date) — only used when nothing else covers the source.
 _DEDUPE_PRIORITY: dict[str, int] = {
-    "rss": 0,
-    "youtube": 1,
-    "podcast": 2,
+    "youtube": 0,
+    "podcast": 1,
+    "rss": 2,
     "x": 3,
     "firecrawl_index": 4,
 }
