@@ -90,19 +90,13 @@
 
     <outline text="News aggregators - English">
       <outline text="AI News by smol.ai" type="rss" xmlUrl="https://buttondown.com/ainews/rss" htmlUrl="https://news.smol.ai"/>
-      <outline text="The Batch (Andrew Ng) - Research/letter only" type="rss" xmlUrl="https://www.deeplearning.ai/the-batch/feed/" htmlUrl="https://www.deeplearning.ai/the-batch"/>
       <outline text="Import AI (Jack Clark)" type="rss" xmlUrl="https://jack-clark.net/feed/" htmlUrl="https://jack-clark.net/"/>
       <outline text="TheSequence" type="rss" xmlUrl="https://thesequence.substack.com/feed" htmlUrl="https://thesequence.substack.com/"/>
       <outline text="HF Daily Papers" type="rss" xmlUrl="https://jamesg.blog/hf-papers.xml" htmlUrl="https://huggingface.co/papers"/>
-      <outline text="r/LocalLLaMA - filter score>=50" type="rss" xmlUrl="https://www.reddit.com/r/LocalLLaMA/.rss" htmlUrl="https://reddit.com/r/LocalLLaMA"/>
-      <outline text="The Pragmatic Engineer - AI keyword filter" type="rss" xmlUrl="https://newsletter.pragmaticengineer.com/feed" htmlUrl="https://newsletter.pragmaticengineer.com/"/>
     </outline>
 
     <outline text="News aggregators - Chinese">
       <outline text="机器之心" type="rss" xmlUrl="https://www.jiqizhixin.com/rss" htmlUrl="https://www.jiqizhixin.com"/>
-      <outline text="量子位 QbitAI - filter 融资/裁员/IPO" type="rss" xmlUrl="https://www.qbitai.com/feed" htmlUrl="https://www.qbitai.com"/>
-      <outline text="新智元 AI Era - filter 融资/裁员/IPO" type="rss" xmlUrl="https://aiera.com.cn/feed" htmlUrl="https://aiera.com.cn"/>
-      <outline text="InfoQ 中文 - AI/LLM/Agent tag whitelist" type="rss" xmlUrl="https://feed.infoq.cn" htmlUrl="https://www.infoq.cn"/>
     </outline>
 
     <outline text="Podcasts">

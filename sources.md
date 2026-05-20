@@ -210,30 +210,23 @@
 
 ## 八、新闻聚合源
 
-> 已剔除：TLDR AI / AlphaSignal / Last Week in AI / Hacker News 全量 / Stratechery / Marginal Revolution（融资+发布会三段式 / 营销 top tools / roundup 重复 / 全站噪音 / 商业战略 / 经济学博客 — 与 AI engineering 实操错位）
+> 已剔除：TLDR AI / AlphaSignal / Last Week in AI / Hacker News 全量 / Stratechery / Marginal Revolution / The Batch / r/LocalLLaMA / The Pragmatic Engineer（融资发布会三段式 / 营销 top tools / roundup 重复 / 全站噪音 / 商业战略 / 经济学博客 / 一半行业新闻 / meme 多 / AI 占比低 — 与 AI engineering 实操错位）
 
 ### 英文
 | 名称 | URL | 适合 | 频率 |
 |---|---|---|---|
 | AI News by smol.ai | https://news.smol.ai | 356 X + 21 Discord 每日工程摘要 | 工作日 |
-| The Batch (Andrew Ng) | https://www.deeplearning.ai/the-batch | 周精选（**只取 Research / Andrew's letter 板块**） | 周三 |
 | Import AI (Jack Clark) | https://jack-clark.net | 论文 + 政策视角，每篇带 technical takeaway | 周一 |
 | TheSequence | https://thesequence.substack.com | RAG/agent/eval/MoE 技术深度 | 一周 5 次 |
 | HF Daily Papers | https://huggingface.co/papers | AK 手选 arXiv | 工作日 |
-| r/LocalLLaMA | https://reddit.com/r/LocalLLaMA | 本地推理/微调/量化实操（**需 reddit score ≥ 50 过滤**） | 实时 |
-| The Pragmatic Engineer | https://newsletter.pragmaticengineer.com | coding-agent 视角（**AI 占比低，需关键词白名单**） | 每周 |
 
-> 已剔除：智东西 / 极客公园 / 硅星人 / 36氪 / AI 科技评论 / 深科技 / Founder Park（硬件政策 / 创业访谈 / 大厂公关 / 创投融资 / 公司动态 / 科普商业 / 微信无 RSS — 全部与 hands-on 错位）
+> 已剔除：智东西 / 极客公园 / 硅星人 / 36氪 / AI 科技评论 / 深科技 / Founder Park / 量子位 / 新智元 / InfoQ 中文 / 夕小瑶科技说（硬件政策 / 创业访谈 / 大厂公关 / 创投融资 / 公司动态 / 科普商业 / 微信无 RSS / 发布会通稿 / 行业八卦 / 全站非 AI 噪音 / 无公开 RSS — 全部与 hands-on 错位）
 
 ### 中文
 | 名称 | URL / 微信 | 适合 | 频率 |
 |---|---|---|---|
 | 机器之心 | https://www.jiqizhixin.com | 论文深度 + 前沿研究 + 模型技术报告解读 | 每天多条 |
 | PaperWeekly | https://www.paperweekly.site | NLP / LLM / CV 论文精读，零 PR | 每天 |
-| 量子位 QbitAI | https://www.qbitai.com | 模型/论文解读混发布会通稿（**过滤 融资/估值/裁员/IPO/CEO 关键词**） | 每天多条 |
-| 新智元 AI Era | https://aiera.com.cn | arXiv 解读 + 标题党行业八卦混合（**同上关键词过滤**） | 每天多条 |
-| InfoQ 中文 | https://www.infoq.cn | 工程深度（QCon/字节美团 LLM 实践，**需 AI/LLM/Agent/RAG 标签白名单**，否则混入 Java/DevOps） | 每天 |
-| 夕小瑶科技说 | 微信 `xixiaoyaoQAQ` | LLM 研究员向（**无公开 RSS，需 WeRSS 桥接；不稳就 DROP**） | 每天 |
 
 ---
 
@@ -252,6 +245,6 @@
 5. Interconnects (Nathan Lambert)
 6. Latent Space
 7. HF Daily Papers
-8. r/LocalLLaMA
-9. 量子位
+8. Hamel Husain
+9. Matt Pocock YouTube
 10. 机器之心
