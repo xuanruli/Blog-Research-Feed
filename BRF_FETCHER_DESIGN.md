@@ -1,8 +1,20 @@
 # `brf` Fetcher Architecture — Design Doc
 
-**Status**: Proposed (no code yet)
+**Status**: Proposed — under review
 **Author**: collaborative session 2026-05-20
 **Supersedes**: ad-hoc per-source-type CLI in `brf/main.py`
+
+**Revision 2** (2026-05-20): address PR #10 review feedback + YouTube edge cases.
+Changes since v1:
+- §3.2 `id` formula includes `source_type` to avoid collisions across fetchers
+- §3.3 ABC docstring documents the nested-pool concurrency contract
+- §3.5 dedupe priority explicit, not "first-completed wins"
+- §3.5 fetch_full default no-overwrite + `--force` flag
+- §3.2 FeedItem gains `schema_version: "0.1"` from day one
+- §3.4 YouTube fetcher: yt-dlp metadata-only fallback for empty descriptions; transcript-availability variance documented
+- §5 SKIP list moved into `sources.yaml` (single source of truth)
+- §7 cost estimate for Phase 4 (firecrawl_index)
+- §10 Q3/Q4/Q5 closed (decisions made above); Q6 kept as known limitation
 
 ---
 
@@ -167,7 +179,8 @@ class FeedItem:
     """One item the agent sees in index.json. Schema is uniform across
     source types so triage logic doesn't need per-type branching."""
 
-    id: str                          # sha1(url)[:12]
+    schema_version: str              # always "0.1" today; bump on breaking change
+    id: str                          # sha1(f"{source_type}:{url}")[:16] — see §3.2.1
     source_type: SourceType
     source: str                      # display name: "Karpathy", "@karpathy", "Matt Pocock"
     title: str                       # may be "" for X tweets
@@ -180,9 +193,27 @@ class FeedItem:
     # extra type-specific fields go here so they don't pollute the
     # top-level schema:
     #   x:          {like_count, retweet_count, ...}
-    #   youtube:    {duration_seconds, channel_id}
-    #   podcast:    {episode_index, audio_url}
+    #   youtube:    {duration_seconds, channel_id, transcript_source}
+    #   podcast:    {episode_index, audio_url, duration_seconds}
 ```
+
+### 3.2.1 `id` formula — collision avoidance
+
+The same URL can legitimately surface through multiple fetchers (e.g., an
+Anthropic news post might be discovered by both `RssFetcher` reading
+`anthropic.com/engineering` AND `FirecrawlIndexFetcher` scraping
+`anthropic.com/news`). Hashing only on URL would assign them the same
+`id`, and the dedupe step (§3.5) would silently drop one — but if we
+later allow same-URL items to coexist (e.g., one with transcript, one
+without), we'd lose a degree of freedom.
+
+```python
+id = hashlib.sha1(f"{source_type}:{url}".encode()).hexdigest()[:16]
+```
+
+Length bumped to 16 (from 12) to keep collision probability negligible
+even with `source_type:url` keying. Birthday-paradox: ~2^32 items before
+a 1% collision chance; we'll never hit that.
 
 **Why dataclass not class hierarchy**: agent reads JSON, not Python
 objects. A uniform shape simplifies serialization, jq queries, and the
@@ -193,6 +224,10 @@ don't bloat the top-level schema for everyone.
 For title-only feeds, `summary == ""` and `needs_firecrawl=True` signals
 the agent to scrape if interested.
 
+**`schema_version` from day one**: cheap forward-compat. When we
+inevitably break the schema in 6 months, migration code can sniff this
+field instead of guessing.
+
 ### 3.3 `SourceFetcher` ABC
 
 ```python
@@ -201,11 +236,29 @@ from collections.abc import Iterable
 from datetime import datetime
 
 class SourceFetcher(ABC):
+    """Base for per-type source fetchers.
+
+    Concurrency contract: each fetcher owns its internal parallelism
+    (e.g., RssFetcher uses ThreadPoolExecutor over the feed list,
+    XFetcher fans out per handle). The Aggregator's job is only to run
+    different fetchers in parallel — NOT to manage workers inside any
+    one fetcher. This nested-pool model means a typical run is:
+
+        aggregator pool (5 fetchers in parallel)
+          ├── RssFetcher (10 workers, one per OPML feed)
+          ├── XFetcher (5 workers, one per handle, capped for rate limit)
+          ├── YouTubeFetcher (10 workers, one per channel RSS)
+          ├── PodcastFetcher (10 workers, one per podcast RSS)
+          └── FirecrawlIndexFetcher (sequential — firecrawl rate limit)
+
+    Total ~40-45 threads at peak. Negligible for our scale.
+    """
+
     source_type: str  # class attribute set by subclass
 
     @abstractmethod
     def fetch(self, since: datetime) -> Iterable[FeedItem]:
-        """Bulk pull. Concurrency within type is the subclass's choice."""
+        """Bulk pull. Implementation owns its internal concurrency."""
 
     @abstractmethod
     def fetch_full(self, item: FeedItem) -> bytes | None:
@@ -262,6 +315,64 @@ would require `RssFetcher.fetch_full` to branch on URL pattern, which
 re-introduces the dispatch problem we're trying to solve. Separate
 classes keep per-type behavior cohesive.
 
+#### YouTubeFetcher edge cases
+
+**(a) Empty `media:description`.** YouTube channel RSS feeds frequently
+ship empty descriptions, especially for tutorial videos or shorts. RSS
+title alone is often too thin to triage ("Build it with Claude #14").
+Strategy: try yt-dlp metadata-only fallback (free, no API key, just an
+HTTP scrape of the watch page):
+
+```python
+def _normalize_youtube_entry(self, entry):
+    desc = (entry.get("media:description") or "").strip()
+    if len(desc) < 80:
+        # yt-dlp metadata-only: extract_info(url, download=False)
+        # Costs 1 HTTP request to youtube.com per call. No API key needed.
+        meta = self._ytdlp_metadata(entry["url"])
+        if meta and meta.get("description"):
+            desc = meta["description"]
+    return FeedItem(
+        source_type="youtube",
+        title=entry["title"],
+        summary=_truncate(desc, 500),       # may still be "" if both fail
+        has_full=False,                      # transcript not fetched yet
+        needs_firecrawl=False,               # firecrawl on YT page is useless
+        extra={
+            "channel_id": entry["channel_id"],
+            "duration_seconds": meta.get("duration") if meta else None,
+        },
+    )
+```
+
+**`needs_firecrawl=False` is deliberate for YouTube items**: scraping a
+youtube.com URL via Firecrawl returns the React shell (no transcript, no
+useful description). Agent should dispatch by `source_type=youtube` →
+`fetch-full` (transcript path) rather than firecrawl.
+
+**(b) Transcript availability variance.** Some videos have captions,
+some don't (creator disabled them; cloud egress IP banned from
+caption API; original language not English; etc). PR #8 already
+implemented two-leg fallback in `brf/youtube.py:get_transcript()`:
+
+```
+fetch_full(youtube_item):
+    1. youtube-transcript-api  (free, IP-banned on cloud is common)
+    2. If 1 fails: yt-dlp bestaudio (≤25MB) + OpenAI Whisper transcribe
+                   ($0.006/min; ~$0.18 for a 30-min talk)
+    Returns transcript bytes + sets extra["transcript_source"] ∈ {captions, whisper}
+    Returns None if both legs fail (private/deleted video, or Whisper >25MB)
+```
+
+**Cost protection**: system_prompt limits ≤ 2 video/podcast transcripts
+per day. Whisper has a 25MB-per-file hard limit which caps any single
+call at ~70min of audio. Long videos that exceed this fail loudly
+(`extra["transcript_source"] = null`, error logged) rather than running
+up costs.
+
+**(c) Channel discovery is yaml-driven**, not autodiscovery. `sources.yaml`
+lists explicit `channel_id`s. Adding a channel = one yaml line.
+
 ### 3.5 `FeedAggregator`
 
 ```python
@@ -271,6 +382,22 @@ class FeedAggregator:
         self.by_type = {f.source_type: f for f in fetchers}
         self.output_dir = output_dir
         (self.output_dir / "full").mkdir(parents=True, exist_ok=True)
+
+    # Dedupe priority: when the same URL surfaces from multiple
+    # fetchers, the higher-priority source wins. Rationale:
+    # - rss has the richest metadata (published date, content:encoded)
+    # - youtube/podcast carry duration + transcript hint
+    # - x is summary-complete but no title
+    # - firecrawl_index is the weakest (extracted from regex on HTML,
+    #   may have wrong title or stale date) — only useful when nothing
+    #   else covers the source.
+    _DEDUPE_PRIORITY = {
+        "rss": 0,
+        "youtube": 1,
+        "podcast": 2,
+        "x": 3,
+        "firecrawl_index": 4,
+    }
 
     def fetch_all(self, since: datetime) -> list[FeedItem]:
         """Run all fetchers concurrently. Write index.json + full/ files.
@@ -288,10 +415,16 @@ class FeedAggregator:
                     print(f"[aggregator] {futures[fut]} failed: {exc}",
                           file=sys.stderr)
 
-        # Dedupe by URL — first occurrence wins
+        # Dedupe by URL with explicit priority (NOT first-completed).
+        # If RSS and firecrawl_index both produce the same Anthropic
+        # news URL, RSS wins because its metadata is richer.
         seen: dict[str, FeedItem] = {}
         for it in all_items:
-            seen.setdefault(it.url, it)
+            existing = seen.get(it.url)
+            if existing is None:
+                seen[it.url] = it
+            elif self._DEDUPE_PRIORITY[it.source_type] < self._DEDUPE_PRIORITY[existing.source_type]:
+                seen[it.url] = it
         unique = list(seen.values())
 
         # Write index.json
@@ -302,17 +435,24 @@ class FeedAggregator:
         )
         return unique
 
-    def fetch_full(self, item_id: str) -> Path | None:
-        """Look up item, dispatch to right fetcher, write to full/."""
+    def fetch_full(self, item_id: str, force: bool = False) -> Path | None:
+        """Look up item, dispatch to right fetcher, write to full/.
+
+        Default behavior is idempotent: if `full/<id>.{ext}` already
+        exists, return it without re-fetching (no API cost). Pass
+        force=True to overwrite and re-fetch.
+        """
         item = self._load_item(item_id)
         if item is None:
             return None
+        ext = self._extension_for(item.source_type)
+        path = self.output_dir / "full" / f"{item.id}.{ext}"
+        if path.exists() and not force:
+            return path  # cached, no API call
         fetcher = self.by_type[item.source_type]
         content = fetcher.fetch_full(item)
         if content is None:
             return None
-        ext = self._extension_for(item.source_type)
-        path = self.output_dir / "full" / f"{item.id}.{ext}"
         path.write_bytes(content)
         return path
 ```
@@ -327,8 +467,10 @@ brf fetch-all --since 2026-05-19 [--output-dir /tmp/feed]
 # → writes /tmp/feed/index.json + /tmp/feed/full/<id>.* (for pre-fetched items)
 # → prints "N items written to /tmp/feed/index.json" to stderr
 
-# Drill-down: by id (looks up source_type internally)
-brf fetch-full --id abc123 [--output-dir /tmp/feed]
+# Drill-down: by id (looks up source_type internally).
+# Default is idempotent: if full/<id>.{ext} already exists, returns
+# the cached path WITHOUT re-fetching. Use --force to re-fetch.
+brf fetch-full --id abc123 [--output-dir /tmp/feed] [--force]
 # → writes /tmp/feed/full/abc123.{html,txt,md,json}
 # → prints the written path to stdout
 
@@ -369,14 +511,29 @@ structured config the aggregator reads at startup:
 
 ```yaml
 # brf/sources.yaml — bundled inside the pip package
+#
+# Single source of truth: skip-list / firecrawl-fallback / summary-only
+# all live as flags on individual entries, not as separate hardcoded
+# sets in Python. Adding a skip / fallback no longer requires a code
+# change + brf bump — just yaml + env recreate.
+
 rss:
   - { name: "Karpathy",        url: "https://karpathy.bearblog.dev/feed/" }
   - { name: "Hamel",           url: "https://hamel.dev/index.xml" }
   - { name: "Interconnects",   url: "https://www.interconnects.ai/feed" }
   - { name: "vLLM releases",   url: "https://github.com/vllm-project/vllm/releases.atom" }
-  # ... 60 entries
-  # NOTE: skip list lives in code (RssFetcher.SKIP_FEEDS) — they're not
-  # in this list because we don't want to fetch them.
+
+  # Skip entries: still listed for visibility, but marked disabled so
+  # `RssFetcher` filters them out at boot. Saves operators from grepping
+  # both yaml and Python to know what's covered.
+  - { name: "Reddit r/LocalLLaMA",  url: "https://www.reddit.com/r/LocalLLaMA/.rss", enabled: false, reason: "403 — Reddit blocks cloud UA" }
+  - { name: "jxnl.co",              url: "https://jxnl.co/feeds/feed.xml",            enabled: false, reason: "404 since site redesign" }
+
+  # Summary-only feeds: flag so agent's needs_firecrawl signal is set
+  # without RssFetcher needing a separate SUMMARY_ONLY_FEEDS constant.
+  - { name: "Eugene Yan",      url: "https://eugeneyan.com/rss/",                      summary_only: true }
+  - { name: "Hacker News",     url: "https://news.ycombinator.com/rss",                summary_only: true }
+  # ... 60 entries total
 
 x:
   handles:
@@ -512,6 +669,30 @@ This is too big to ship in one PR. Phased rollout:
 - New `fetchers/firecrawl_index.py`
 - ~30 no-feed sites configured in `sources.yaml`
 - Ship as `brf 0.2.3`, env-v10
+
+#### Cost estimate (matters because firecrawl is the only paid leg here)
+
+Per daily run:
+
+| Operation | Count/day | Unit cost | Daily cost |
+|---|---|---|---|
+| index scrape (one per no-feed site) | 30 | $0.005 | $0.15 |
+| article scrape (agent drills down via `fetch-full`) | ~10-15 | $0.005 | $0.05-0.08 |
+| **Phase 4 firecrawl_index subtotal** | | | **~$0.20-0.25/day** |
+
+Plus existing (Phase 2 already shipped):
+| RSS firecrawl fallback (3 sites, jiqizhixin/HF/langchain) | 3 | $0.005 | $0.015 |
+| RSS summary-only firecrawl drill (~5/day) | 5 | $0.005 | $0.025 |
+
+**Total firecrawl spend per daily run: ~$0.25/day ≈ $7-8/month.**
+
+Plus Whisper (transcripts, ≤2/day cap): $0.36/day worst case ≈ $11/month.
+Plus X API (10 handles, 2 reads each): $0.10/day ≈ $3/month.
+
+**All-in cost target: <$25/month for daily curator runs.** If
+firecrawl_index list grows (e.g., to 60 no-feed sites), recompute and
+consider per-site cache or weekly-instead-of-daily for less critical
+sources.
 
 ### Phase 5: agent system prompt rewrite
 
@@ -690,37 +871,31 @@ change required.
 
 ## 10. Open questions
 
-1. **X handle list scope**: `sources.yaml` lists ~10 core handles for
-   bulk fetch. The other ~35 in sources.md §5 are accessible via legacy
-   `brf fetch x-user --handle X`. Should the agent see the long list in
-   its system prompt? Or just the bulk-fetched core? Leaning toward:
-   bulk for core, agent gets a documented list of "additional handles
-   you can ask about" in the prompt.
+1. **X handle list scope** — RESOLVED: bulk-fetch core ~10 in
+   `sources.yaml`; remaining ~35 documented in system prompt as
+   "additional handles you can ask about" via legacy `brf fetch x-user`.
 
-2. **`fetch_full` for X**: tweets are summary-complete (≤280 chars). For
-   threads, we'd need to fetch conversation context (more API calls).
-   Should `XFetcher.fetch_full` do this or stay no-op? Leaning no-op for
-   now; agent can use search for thread context if needed.
+2. **`fetch_full` for X** — RESOLVED: no-op for v1. Tweets are
+   summary-complete. If thread context becomes important, add separate
+   `brf fetch x-thread --tweet-id` command in a future phase.
 
-3. **Concurrency limits**: aggregator runs all fetchers in parallel.
-   X API has rate limits; YouTube transcript API has IP-ban risk.
-   Need empirical tuning of per-fetcher worker counts.
+3. **Concurrency limits** — RESOLVED in §3.3 ABC docstring: each
+   fetcher owns internal parallelism (RSS 10, X 5, YouTube 10, Podcast
+   10, Firecrawl sequential). Aggregator only parallelizes across
+   fetchers (5 outer workers). Total ~40-45 threads at peak.
 
-4. **Caching `fetch_full` results**: if the agent calls `fetch_full
-   --id abc` twice for the same id in one session, do we re-fetch? Cheap
-   answer: no, the previous run wrote `full/abc.html`, so `cat` is
-   idempotent. But what if the file already exists? Currently we'd
-   overwrite. Maybe add a `--no-overwrite` default.
+4. **`fetch_full` overwrite semantics** — RESOLVED in §3.5: default
+   idempotent (returns cached path if file exists, no API call),
+   `--force` flag to re-fetch.
 
-5. **Schema versioning**: should `FeedItem` carry a `schema_version`
-   field for future migrations? Probably yes, but `0.1` for now and bump
-   when first breaking change happens.
+5. **Schema versioning** — RESOLVED in §3.2: `schema_version: "0.1"`
+   from day one. Cheap forward-compat.
 
-6. **Date precision for `firecrawl_index`**: some sites (LangChain blog)
-   have no date in URL. Currently we'd include them every day regardless
-   of since. Mitigation: per-source `FALLBACK_MAX_ITEMS = 10` cap. Better
-   long-term: secondary firecrawl on each article's HTML to extract its
-   actual publish date. Costs extra firecrawl per item — defer.
+6. **Date precision for `firecrawl_index`** — known limitation, Phase 4.
+   `FALLBACK_MAX_ITEMS = 10` cap is the v1 mitigation. Improving date
+   precision would require a secondary firecrawl per article (~$0.005 ×
+   N article extras/day) which is not worth it pre-launch. Revisit if
+   stale-content complaints surface in production.
 
 ---
 
@@ -728,12 +903,37 @@ change required.
 
 Before starting Phase 1 implementation:
 
-- [ ] FeedItem schema reviewed and approved (esp. `extra: dict` semantics)
-- [ ] Fetcher ABC interface reviewed (`fetch_full → bytes | None` ok?)
-- [ ] sources.yaml schema reviewed (esp. firecrawl_index regex format)
-- [ ] File layout reviewed (which legacy files stay, which get replaced)
-- [ ] Phased migration plan approved (5 phases ≈ 5 brf releases)
-- [ ] Open questions §10 — at least Q1 (X handle list scope) answered
+- [x] FeedItem schema reviewed and approved (esp. `extra: dict` semantics)
+- [x] Fetcher ABC interface reviewed (`fetch_full → bytes | None` ok?)
+- [x] sources.yaml schema reviewed — skip-list/summary-only flags
+      consolidated into yaml per review #4
+- [x] File layout reviewed — legacy `brf/rss.py` retention deferred to
+      Phase 2 per review #7
+- [x] Phased migration plan approved (5 phases ≈ 5 brf releases)
+- [x] Open questions §10 — Q3, Q4, Q5 resolved in this revision;
+      Q1, Q2 answered (above); Q6 deferred as known Phase 4 limitation
 
-Once approved, Phase 1 lands ~half a day's work. Subsequent phases
-~half day each.
+Phase 1 ready to implement.
+
+## 12. Deferred items (Phase 2+)
+
+Tracked here so they don't get lost:
+
+- **Review #7 — legacy `brf/rss.py` consolidation.** After Phase 1
+  stabilizes, point the legacy `brf fetch rss` CLI at
+  `fetchers/rss.py:RssFetcher` and delete the old module to eliminate
+  two-source-of-truth drift. Phase 2 deliverable.
+
+- **YouTube duration pre-check.** Before `yt-dlp download`, call
+  `extract_info(url, download=False)` to read `duration_seconds`; skip
+  if it would exceed Whisper 25MB. Saves bandwidth on long videos. Cheap
+  to add to `YouTubeFetcher.fetch_full`. Phase 3 deliverable.
+
+- **firecrawl_index article date precision.** Optional secondary
+  firecrawl on each article URL to extract real publish date (instead of
+  trusting URL slug heuristics). Defer until staleness becomes a real
+  agent-side complaint.
+
+- **Per-handle X recent search endpoint** (`from:A OR from:B`). Could
+  reduce X API spend by ~5× if agent traffic grows beyond ~10
+  handles/day. Pre-mature now.
