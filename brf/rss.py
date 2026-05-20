@@ -1,23 +1,24 @@
 """RSS / Atom fetch module for the brf CLI.
 
-Parses ``sources.opml`` with stdlib ``xml.etree.ElementTree``, then pulls each
-live feed in parallel via ``feedparser`` and normalizes entries into the dict
-schema documented on :func:`fetch_recent`.
+Parses ``sources.opml`` with stdlib ``xml.etree.ElementTree``, fetches each
+live feed in parallel via ``httpx``, and parses the response with a small
+stdlib RSS/Atom parser (replaces ``feedparser`` to avoid its sdist-only
+``sgmllib3k`` transitive dep — that build silently fails inside Anthropic's
+Managed Agent env builder, so we keep brf install pure-PyPI-wheel).
 
-Known-broken and summary-only feeds are hardcoded based on the audit in
-``SOURCES_HEALTH.md`` (see §1 and §2). Update those sets when the health
-check is re-run.
+Known-broken and summary-only feeds are hardcoded from ``SOURCES_HEALTH.md``
+(see §1 and §2). Update those sets when the health check is re-run.
 """
 from __future__ import annotations
 
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Optional
 from xml.etree import ElementTree as ET
 
-import feedparser
 import httpx
 
 # ---------------------------------------------------------------------------
@@ -66,6 +67,14 @@ SUMMARY_MAX_CHARS = 500
 DEFAULT_TIMEOUT_SECS = 15
 MAX_WORKERS = 10
 
+# XML namespaces. RSS 2.0 itself has no default namespace on its tags;
+# content:encoded uses the content namespace; Atom uses its own.
+NS = {
+    "atom": "http://www.w3.org/2005/Atom",
+    "content": "http://purl.org/rss/1.0/modules/content/",
+    "dc": "http://purl.org/dc/elements/1.1/",
+}
+
 
 def _norm(u: str) -> str:
     return u.rstrip("/").lower()
@@ -85,7 +94,6 @@ def _parse_opml(opml_path: Path) -> list[dict]:
     tree = ET.parse(opml_path)
     root = tree.getroot()
     feeds: list[dict] = []
-    # Walk every outline; the OPML has nested category outlines.
     for outline in root.iter("outline"):
         if outline.get("type") != "rss":
             continue
@@ -100,15 +108,129 @@ def _parse_opml(opml_path: Path) -> list[dict]:
     return feeds
 
 
-def _struct_time_to_iso(st) -> Optional[str]:
-    """Convert a ``time.struct_time`` (assumed UTC from feedparser) to ISO8601."""
-    if not st:
-        return None
+# ---------------------------------------------------------------------------
+# Minimal RSS/Atom parser (stdlib only)
+# ---------------------------------------------------------------------------
+def _local(tag: str) -> str:
+    """Strip ElementTree namespace prefix: ``{http://...}title`` → ``title``."""
+    return tag.split("}", 1)[-1] if "}" in tag else tag
+
+
+def _text(el) -> str:
+    if el is None:
+        return ""
+    return (el.text or "").strip()
+
+
+def _parse_pub_date(text: str) -> str:
+    """Accept RFC 822 (RSS pubDate) or ISO 8601 (Atom) and return ISO 8601 UTC."""
+    text = (text or "").strip()
+    if not text:
+        return ""
+    # ISO 8601 first (Atom + many RSS variants do this too).
     try:
-        dt = datetime(*st[:6], tzinfo=timezone.utc)
+        dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.isoformat()
+    except ValueError:
+        pass
+    # RFC 822 (RSS pubDate canonical).
+    try:
+        dt = parsedate_to_datetime(text)
+        if dt is None:
+            return ""
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
         return dt.isoformat()
     except (TypeError, ValueError):
-        return None
+        return ""
+
+
+def _parse_rss_item(item) -> dict:
+    """One ``<item>`` from RSS 2.0."""
+    full_text = _text(item.find("content:encoded", NS))
+    return {
+        "title": _text(item.find("title")),
+        "link": _text(item.find("link")),
+        "summary": _text(item.find("description")),
+        "full_text": full_text or None,
+        "published_iso": _parse_pub_date(
+            _text(item.find("pubDate"))
+            or _text(item.find("dc:date", NS))
+        ),
+    }
+
+
+def _parse_atom_entry(entry) -> dict:
+    """One ``<entry>`` from Atom 1.0."""
+    # Prefer rel="alternate" link, fall back to first href-bearing link.
+    link = ""
+    for link_el in entry.findall("atom:link", NS):
+        rel = link_el.get("rel", "alternate")
+        href = link_el.get("href")
+        if href and rel == "alternate":
+            link = href
+            break
+    if not link:
+        first = entry.find("atom:link", NS)
+        if first is not None:
+            link = first.get("href") or ""
+
+    # Atom <content> may be plain text, escaped HTML, or inline xhtml.
+    full_text: Optional[str] = None
+    content_el = entry.find("atom:content", NS)
+    if content_el is not None:
+        if content_el.text:
+            full_text = content_el.text
+        elif len(content_el) > 0:
+            # type="xhtml" — serialize children
+            full_text = "".join(
+                ET.tostring(child, encoding="unicode", method="html")
+                for child in content_el
+            )
+
+    return {
+        "title": _text(entry.find("atom:title", NS)),
+        "link": link,
+        "summary": _text(entry.find("atom:summary", NS)),
+        "full_text": full_text,
+        "published_iso": _parse_pub_date(
+            _text(entry.find("atom:published", NS))
+            or _text(entry.find("atom:updated", NS))
+        ),
+    }
+
+
+def _parse_feed(content: bytes) -> dict:
+    """Parse RSS 2.0 or Atom 1.0 bytes into ``{title, entries: [...]}``.
+
+    Each entry dict: ``{title, link, summary, full_text, published_iso}``.
+    Raises ``ValueError`` on unrecognized root tag or XML parse failure.
+    """
+    try:
+        root = ET.fromstring(content)
+    except ET.ParseError as exc:
+        raise ValueError(f"XML parse error: {exc}") from exc
+
+    local = _local(root.tag).lower()
+    if local == "rss":
+        channel = root.find("channel")
+        if channel is None:
+            return {"title": "", "entries": []}
+        return {
+            "title": _text(channel.find("title")),
+            "entries": [_parse_rss_item(item) for item in channel.findall("item")],
+        }
+    if local == "feed":
+        return {
+            "title": _text(root.find("atom:title", NS)),
+            "entries": [
+                _parse_atom_entry(entry)
+                for entry in root.findall("atom:entry", NS)
+            ],
+        }
+    raise ValueError(f"Unknown feed root tag: {local!r}")
 
 
 def _truncate(text: str, limit: int = SUMMARY_MAX_CHARS) -> str:
@@ -119,6 +241,9 @@ def _truncate(text: str, limit: int = SUMMARY_MAX_CHARS) -> str:
     return text[: limit - 1].rstrip() + "…"
 
 
+# ---------------------------------------------------------------------------
+# Network fetch + normalize
+# ---------------------------------------------------------------------------
 def _fetch_one(feed_meta: dict, since: Optional[datetime]) -> list[dict]:
     """Fetch a single feed and return normalized items. Logs to stderr on error."""
     xml_url = feed_meta["xml_url"]
@@ -132,26 +257,16 @@ def _fetch_one(feed_meta: dict, since: Optional[datetime]) -> list[dict]:
             follow_redirects=True,
             headers={"User-Agent": "Mozilla/5.0 BlogResearchFeed/1.0"},
         )
-        parsed = feedparser.parse(r.content)
+        r.raise_for_status()
+        parsed = _parse_feed(r.content)
     except Exception as exc:  # network, parse, anything
         print(f"[rss] FAILED {xml_url}: {exc}", file=sys.stderr)
         return items
 
-    if getattr(parsed, "bozo", False) and not getattr(parsed, "entries", None):
-        bozo_exc = getattr(parsed, "bozo_exception", None)
-        print(f"[rss] bozo {xml_url}: {bozo_exc}", file=sys.stderr)
-        return items
+    source_title = parsed.get("title") or feed_meta["title"]
 
-    source_title = (
-        (parsed.feed.get("title") if hasattr(parsed, "feed") else None)
-        or feed_meta["title"]
-    )
-
-    for entry in parsed.entries:
-        published_iso = (
-            _struct_time_to_iso(entry.get("published_parsed"))
-            or _struct_time_to_iso(entry.get("updated_parsed"))
-        )
+    for entry in parsed["entries"]:
+        published_iso = entry["published_iso"]
 
         if since is not None and published_iso:
             try:
@@ -164,27 +279,14 @@ def _fetch_one(feed_meta: dict, since: Optional[datetime]) -> list[dict]:
             except ValueError:
                 pass
 
-        # full_text from <content:encoded> if available.
-        full_text: Optional[str] = None
-        contents = entry.get("content")
-        if contents:
-            try:
-                value = contents[0].get("value")
-                if value:
-                    full_text = value
-            except (AttributeError, IndexError, KeyError):
-                full_text = None
-
-        summary = entry.get("summary", "") or entry.get("description", "") or ""
-
         items.append({
             "source": source_title,
             "source_url": feed_meta["html_url"],
-            "title": entry.get("title", "") or "",
-            "url": entry.get("link", "") or "",
-            "published": published_iso or "",
-            "summary": _truncate(summary),
-            "full_text": full_text,
+            "title": entry["title"],
+            "url": entry["link"],
+            "published": published_iso,
+            "summary": _truncate(entry["summary"]),
+            "full_text": entry["full_text"],
             "needs_firecrawl": needs_firecrawl,
         })
 
