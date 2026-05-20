@@ -1,0 +1,363 @@
+# brf/sources.yaml — single source of truth for all source types.
+#
+# Replaces sources.opml + SKIP_FEEDS/SUMMARY_ONLY_FEEDS/FIRECRAWL_FALLBACK_FEEDS
+# constants in brf/rss.py. Loader: brf/sources_config.py.
+#
+# Conventions:
+#   - `enabled: false` + `reason: "..."` for known-broken sources we keep
+#     listed for visibility (replaces SKIP_FEEDS).
+#   - `summary_only: true` for feeds whose RSS only ships titles/short
+#     blurbs (replaces SUMMARY_ONLY_FEEDS).
+#   - firecrawl_index entries describe how to scrape index pages for
+#     no-feed sites and broken-RSS-but-live-HTML sites.
+
+rss:
+  # --- Must-read essay authors ---
+  - { name: "Andrej Karpathy",           url: "https://karpathy.bearblog.dev/feed/" }
+  - { name: "Simon Willison",            url: "https://simonwillison.net/atom/everything/", summary_only: true }
+  - { name: "Hamel Husain",              url: "https://hamel.dev/index.xml" }
+  - { name: "Anthropic Engineering (community scraper)", url: "https://raw.githubusercontent.com/conoro/anthropic-engineering-rss-feed/main/feed.xml", enabled: false, reason: "conoro repo 404; covered by firecrawl_index anthropic.com/engineering" }
+  - { name: "HumanLayer 12-Factor Agents (commits)", url: "https://github.com/humanlayer/12-factor-agents/commits.atom" }
+  - { name: "Thorsten Ball - Register Spill", url: "https://registerspill.thorstenball.com/feed" }
+  - { name: "AI Futures Project (AI 2027)", url: "https://blog.ai-futures.org/feed" }
+  - { name: "Astral Codex Ten (Scott Alexander)", url: "https://www.astralcodexten.com/feed" }
+  - { name: "David Silver",              url: "https://davidstarsilver.wordpress.com/feed/", enabled: false, reason: "RSS dead per SOURCES_HEALTH.md §1" }
+
+  # --- Individual researcher blogs ---
+  - { name: "Interconnects (Nathan Lambert)", url: "https://www.interconnects.ai/feed" }
+  - { name: "Latent Space (swyx)",       url: "https://www.latent.space/feed" }
+  - { name: "Lilian Weng - Lil'Log",     url: "https://lilianweng.github.io/index.xml", summary_only: true }
+  - { name: "Sebastian Raschka - Ahead of AI", url: "https://magazine.sebastianraschka.com/feed" }
+  - { name: "Cameron Wolfe - Deep Learning Focus", url: "https://cameronrwolfe.substack.com/feed" }
+  - { name: "Eugene Yan",                url: "https://eugeneyan.com/rss/", summary_only: true }
+  - { name: "Chip Huyen",                url: "https://huyenchip.com/feed.xml" }
+  - { name: "Jason Liu",                 url: "https://jxnl.co/feeds/feed.xml", enabled: false, reason: "404 since site redesign" }
+  - { name: "Dwarkesh Patel",            url: "https://www.dwarkesh.com/feed" }
+  - { name: "Ethan Mollick - One Useful Thing", url: "https://www.oneusefulthing.org/feed" }
+  - { name: "Gwern",                     url: "https://gwern.net/index.xml", enabled: false, reason: "RSS dead per SOURCES_HEALTH.md §1" }
+  - { name: "Neel Nanda",                url: "https://www.neelnanda.io/blog?format=rss" }
+  - { name: "Embrace The Red",           url: "https://embracethered.com/blog/index.xml", summary_only: true }
+  - { name: "ChinaTalk",                 url: "https://www.chinatalk.media/feed" }
+  - { name: "Matt Pocock (blog)",        url: "https://www.mattpocock.com/rss.xml" }
+  - { name: "Matt Pocock (YouTube)",     url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCswG6FSbgZjbWtdf_hMLaow" }
+
+  # --- OSS tool releases: Agent frameworks ---
+  - { name: "LangChain blog",            url: "https://blog.langchain.com/rss/", enabled: false, reason: "RSS broken; covered by firecrawl_index" }
+  - { name: "LangGraph releases",        url: "https://github.com/langchain-ai/langgraph/releases.atom" }
+  - { name: "LlamaIndex releases",       url: "https://github.com/run-llama/llama_index/releases.atom" }
+  - { name: "DSPy releases",             url: "https://github.com/stanfordnlp/dspy/releases.atom" }
+  - { name: "CrewAI releases",           url: "https://github.com/crewAIInc/crewAI/releases.atom" }
+  - { name: "Microsoft Agent Framework", url: "https://devblogs.microsoft.com/agent-framework/feed/" }
+  - { name: "smolagents releases",       url: "https://github.com/huggingface/smolagents/releases.atom" }
+  - { name: "Pydantic AI releases",      url: "https://github.com/pydantic/pydantic-ai/releases.atom" }
+  - { name: "Mastra releases",           url: "https://github.com/mastra-ai/mastra/releases.atom" }
+  - { name: "Inngest AgentKit releases", url: "https://github.com/inngest/agent-kit/releases.atom" }
+
+  # --- OSS tool releases: Claude Code ecosystem ---
+  - { name: "wshobson/agents commits",   url: "https://github.com/wshobson/agents/commits.atom" }
+  - { name: "VoltAgent subagents commits", url: "https://github.com/VoltAgent/awesome-claude-code-subagents/commits.atom" }
+  - { name: "awesome-claude-code commits", url: "https://github.com/hesreallyhim/awesome-claude-code/commits.atom" }
+  - { name: "claude-squad releases",     url: "https://github.com/smtg-ai/claude-squad/releases.atom" }
+
+  # --- OSS tool releases: Eval / Observability ---
+  - { name: "Inspect AI releases",       url: "https://github.com/UKGovernmentBEIS/inspect_ai/releases.atom" }
+  - { name: "Braintrust blog",           url: "https://www.braintrust.dev/blog/rss.xml", enabled: false, reason: "RSS dead per SOURCES_HEALTH.md §1" }
+  - { name: "Arize Phoenix releases",    url: "https://github.com/Arize-ai/phoenix/releases.atom" }
+  - { name: "W&B Weave releases",        url: "https://github.com/wandb/weave/releases.atom" }
+
+  # --- OSS tool releases: Inference ---
+  - { name: "vLLM blog",                 url: "https://blog.vllm.ai/feed.xml", enabled: false, reason: "RSS dead per SOURCES_HEALTH.md §1" }
+  - { name: "vLLM releases",             url: "https://github.com/vllm-project/vllm/releases.atom" }
+  - { name: "SGLang releases",           url: "https://github.com/sgl-project/sglang/releases.atom" }
+  - { name: "llama.cpp releases",        url: "https://github.com/ggml-org/llama.cpp/releases.atom" }
+  - { name: "Ollama releases",           url: "https://github.com/ollama/ollama/releases.atom" }
+
+  # --- OSS tool releases: Coding agents ---
+  - { name: "Cline releases",            url: "https://github.com/cline/cline/releases.atom" }
+  - { name: "Aider releases",            url: "https://github.com/Aider-AI/aider/releases.atom" }
+  - { name: "Continue releases",         url: "https://github.com/continuedev/continue/releases.atom" }
+  - { name: "Zed blog",                  url: "https://zed.dev/blog.rss", summary_only: true }
+  - { name: "OpenHands releases",        url: "https://github.com/All-Hands-AI/OpenHands/releases.atom" }
+  - { name: "SWE-agent releases",        url: "https://github.com/SWE-agent/SWE-agent/releases.atom" }
+
+  # --- OSS tool releases: RAG / Browser / MCP ---
+  - { name: "LanceDB releases",          url: "https://github.com/lancedb/lancedb/releases.atom" }
+  - { name: "Vespa blog",                url: "https://blog.vespa.ai/feed.xml" }
+  - { name: "Browser Use releases",      url: "https://github.com/browser-use/browser-use/releases.atom" }
+  - { name: "Stagehand releases",        url: "https://github.com/browserbase/stagehand/releases.atom" }
+  - { name: "Playwright releases",       url: "https://github.com/microsoft/playwright/releases.atom" }
+  - { name: "MCP spec commits",          url: "https://github.com/modelcontextprotocol/modelcontextprotocol/commits.atom" }
+
+  # --- News aggregators: English ---
+  - { name: "AI News by smol.ai",        url: "https://buttondown.com/ainews/rss" }
+  - { name: "The Batch (Andrew Ng)",     url: "https://www.deeplearning.ai/the-batch/feed/", enabled: false, reason: "RSS dead per SOURCES_HEALTH.md §1" }
+  - { name: "Import AI (Jack Clark)",    url: "https://jack-clark.net/feed/" }
+  - { name: "TLDR AI",                   url: "https://tldr.tech/api/rss/ai", summary_only: true }
+  - { name: "TheSequence",               url: "https://thesequence.substack.com/feed" }
+  - { name: "HF Daily Papers",           url: "https://jamesg.blog/hf-papers.xml", enabled: false, reason: "RSS broken; covered by firecrawl_index" }
+  - { name: "Hacker News front page",    url: "https://news.ycombinator.com/rss", summary_only: true }
+  - { name: "r/LocalLLaMA",              url: "https://www.reddit.com/r/LocalLLaMA/.rss", enabled: false, reason: "403 — Reddit blocks cloud UA" }
+  - { name: "Stratechery",               url: "https://stratechery.com/feed/", summary_only: true }
+  - { name: "The Pragmatic Engineer",    url: "https://newsletter.pragmaticengineer.com/feed" }
+  - { name: "Marginal Revolution",       url: "https://marginalrevolution.com/feed" }
+
+  # --- News aggregators: Chinese ---
+  - { name: "机器之心",                  url: "https://www.jiqizhixin.com/rss", enabled: false, reason: "RSS broken; covered by firecrawl_index" }
+  - { name: "量子位 QbitAI",             url: "https://www.qbitai.com/feed", summary_only: true }
+  - { name: "新智元 AI Era",             url: "https://aiera.com.cn/feed", enabled: false, reason: "RSS dead per SOURCES_HEALTH.md §1" }
+  - { name: "智东西 Zhidx",              url: "https://zhidx.com/feed", enabled: false, reason: "RSS dead per SOURCES_HEALTH.md §1" }
+  - { name: "极客公园",                  url: "https://www.geekpark.net/rss", enabled: false, reason: "RSS dead per SOURCES_HEALTH.md §1" }
+  - { name: "InfoQ 中文",                url: "https://feed.infoq.cn", enabled: false, reason: "RSS dead per SOURCES_HEALTH.md §1" }
+
+x:
+  # Core ~10 bulk-fetched daily. The remaining ~35 X-only handles from
+  # sources.md §5 / SOURCES_HEALTH.md §6 stay agent-callable via the
+  # legacy `brf fetch x-user --handle X` CLI, listed in the system prompt.
+  handles:
+    - karpathy
+    - simonw
+    - natolambert
+    - sleepinyourhat
+    - AmandaAskell
+    - hamelhusain
+    - eugeneyan
+    - swyx
+    - repligate
+    - jeremyphoward
+
+youtube:
+  # Start with two channels; YouTube channel_ids can be added freely here
+  # without code change. Extract a channel_id from the channel page source
+  # ("externalId") or its RSS URL.
+  channels:
+    - { name: "Matt Pocock", channel_id: "UCswG6FSbgZjbWtdf_hMLaow" }
+    - { name: "Andrej Karpathy", channel_id: "UCXUPKJO5MZQN11PqgIvyuvQ" }
+    # TODO: add Yannic Kilcher, Dwarkesh, 3Blue1Brown, etc. once Phase 3
+    # YouTubeFetcher lands.
+
+podcasts:
+  - { name: "Latent Space",         url: "https://api.substack.com/feed/podcast/1084089.rss" }
+  - { name: "Dwarkesh Podcast",     url: "https://api.substack.com/feed/podcast/68003.rss",       enabled: false, reason: "RSS dead per SOURCES_HEALTH.md §1; need replacement URL" }
+  - { name: "Cognitive Revolution", url: "https://feeds.transistor.fm/the-cognitive-revolution", enabled: false, reason: "RSS dead per SOURCES_HEALTH.md §1; need replacement URL" }
+  - { name: "ChinaTalk",            url: "https://feeds.megaphone.fm/CHTH3437994392",            enabled: false, reason: "RSS dead per SOURCES_HEALTH.md §1; need replacement URL" }
+
+firecrawl_index:
+  # Entries already proven in FIRECRAWL_FALLBACK_FEEDS (brf/rss.py).
+  - name: "机器之心"
+    url: "https://www.jiqizhixin.com"
+    article_url_regex: 'https?://www\.jiqizhixin\.com/articles/(\d{4}-\d{2}-\d{2})-\d+'
+    date_format: "%Y-%m-%d"
+    date_group: 1
+  - name: "HF Daily Papers"
+    url: "https://huggingface.co/papers"
+    article_url_regex: 'https?://huggingface\.co/papers/\d{4}\.\d{4,5}'
+    date_format: null
+    date_group: null
+  - name: "LangChain Blog"
+    url: "https://blog.langchain.com"
+    # Negative lookahead drops category/tag/author/page indices.
+    article_url_regex: 'https?://blog\.langchain\.(?:com|dev)/(?!category/|tag/|author/|page/|rss/?$)([a-z0-9]+(?:-[a-z0-9]+)+)/?(?:\?.*)?$'
+    date_format: null
+    date_group: null
+
+  # --- Anthropic family (SOURCES_HEALTH.md §5 + sources.md §2) ---
+  - name: "Anthropic News"
+    url: "https://www.anthropic.com/news"
+    article_url_regex: 'https?://www\.anthropic\.com/news/[a-z0-9-]+'
+    date_format: null
+    date_group: null
+  - name: "Anthropic Research"
+    url: "https://www.anthropic.com/research"
+    article_url_regex: 'https?://www\.anthropic\.com/research/[a-z0-9-]+'
+    date_format: null
+    date_group: null
+  - name: "Anthropic Engineering"
+    url: "https://www.anthropic.com/engineering"
+    article_url_regex: 'https?://www\.anthropic\.com/engineering/[a-z0-9-]+'
+    date_format: null
+    date_group: null
+  - name: "Anthropic Alignment"
+    url: "https://alignment.anthropic.com"
+    # TODO: refine after sample firecrawl markdown
+    article_url_regex: 'https?://alignment\.anthropic\.com/[a-z0-9-/]+'
+    date_format: null
+    date_group: null
+  - name: "Transformer Circuits"
+    url: "https://transformer-circuits.pub"
+    # TODO: refine after sample firecrawl markdown
+    article_url_regex: 'https?://transformer-circuits\.pub/\d{4}/[a-z0-9-]+'
+    date_format: null
+    date_group: null
+
+  # --- US frontier labs ---
+  - name: "OpenAI News"
+    url: "https://openai.com/news"
+    article_url_regex: 'https?://openai\.com/(?:index/)?[a-z0-9-]+'
+    date_format: null
+    date_group: null
+  - name: "Google DeepMind Blog"
+    url: "https://deepmind.google/discover/blog"
+    article_url_regex: 'https?://deepmind\.google/discover/blog/[a-z0-9-]+'
+    date_format: null
+    date_group: null
+  - name: "Meta AI Blog"
+    url: "https://ai.meta.com/blog"
+    article_url_regex: 'https?://ai\.meta\.com/blog/[a-z0-9-]+'
+    date_format: null
+    date_group: null
+  - name: "Mistral News"
+    url: "https://mistral.ai/news"
+    article_url_regex: 'https?://mistral\.ai/news/[a-z0-9-]+'
+    date_format: null
+    date_group: null
+  - name: "Cohere Blog"
+    url: "https://cohere.com/blog"
+    article_url_regex: 'https?://cohere\.com/blog/[a-z0-9-]+'
+    date_format: null
+    date_group: null
+  - name: "xAI News"
+    url: "https://x.ai/news"
+    article_url_regex: 'https?://x\.ai/news/[a-z0-9-]+'
+    date_format: null
+    date_group: null
+  - name: "Apple Machine Learning Research"
+    url: "https://machinelearning.apple.com"
+    # TODO: refine after sample firecrawl markdown
+    article_url_regex: 'https?://machinelearning\.apple\.com/research/[a-z0-9-]+'
+    date_format: null
+    date_group: null
+
+  # --- Chinese labs ---
+  - name: "Moonshot AI"
+    url: "https://www.moonshot.ai"
+    # TODO: refine after sample firecrawl markdown
+    article_url_regex: 'https?://(?:www\.)?moonshot\.ai/[a-z0-9-/]+'
+    date_format: null
+    date_group: null
+  - name: "Zhipu AI"
+    url: "https://www.zhipuai.cn"
+    # TODO: refine after sample firecrawl markdown
+    article_url_regex: 'https?://(?:www\.)?zhipuai\.cn/[a-z0-9-/]+'
+    date_format: null
+    date_group: null
+  - name: "DeepSeek News"
+    url: "https://api-docs.deepseek.com/news"
+    # TODO: refine after sample firecrawl markdown; 404 in current health check
+    article_url_regex: 'https?://api-docs\.deepseek\.com/news/[a-z0-9-]+'
+    date_format: null
+    date_group: null
+  - name: "Qwen Blog"
+    url: "https://qwen.ai/blog"
+    # TODO: refine after sample firecrawl markdown
+    article_url_regex: 'https?://(?:www\.)?qwen\.ai/blog/[a-z0-9-]+'
+    date_format: null
+    date_group: null
+
+  # --- Individual / research blogs ---
+  - name: "Cognition Labs Blog"
+    url: "https://cognition.ai/blog"
+    article_url_regex: 'https?://cognition\.ai/blog/[a-z0-9-]+'
+    date_format: null
+    date_group: null
+  - name: "Chroma Research"
+    url: "https://research.trychroma.com"
+    # TODO: refine after sample firecrawl markdown
+    article_url_regex: 'https?://research\.trychroma\.com/[a-z0-9-/]+'
+    date_format: null
+    date_group: null
+  - name: "Shreya Shankar"
+    url: "https://www.sh-reya.com/blog"
+    # TODO: refine after sample firecrawl markdown
+    article_url_regex: 'https?://(?:www\.)?sh-reya\.com/blog/[a-z0-9-]+'
+    date_format: null
+    date_group: null
+  - name: "Thariq Shihipar"
+    url: "https://thariq.io"
+    # TODO: refine after sample firecrawl markdown
+    article_url_regex: 'https?://thariq\.io/[a-z0-9-/]+'
+    date_format: null
+    date_group: null
+  - name: "Dario Amodei"
+    url: "https://www.darioamodei.com"
+    # TODO: refine after sample firecrawl markdown
+    article_url_regex: 'https?://(?:www\.)?darioamodei\.com/[a-z0-9-]+'
+    date_format: null
+    date_group: null
+  - name: "Rich Sutton - Incomplete Ideas"
+    url: "http://www.incompleteideas.net"
+    # TODO: refine after sample firecrawl markdown
+    article_url_regex: 'https?://(?:www\.)?incompleteideas\.net/[A-Za-z0-9_./-]+\.html'
+    date_format: null
+    date_group: null
+
+  # --- Tool / changelog blogs ---
+  - name: "Conductor Changelog"
+    url: "https://conductor.build/changelog"
+    # TODO: refine after sample firecrawl markdown
+    article_url_regex: 'https?://conductor\.build/changelog/[a-z0-9-]+'
+    date_format: null
+    date_group: null
+  - name: "Shipyard Blog"
+    url: "https://shipyard.build/blog"
+    # TODO: refine after sample firecrawl markdown
+    article_url_regex: 'https?://shipyard\.build/blog/[a-z0-9-]+'
+    date_format: null
+    date_group: null
+  - name: "Turbopuffer Blog"
+    url: "https://turbopuffer.com/blog"
+    # TODO: refine after sample firecrawl markdown
+    article_url_regex: 'https?://turbopuffer\.com/blog/[a-z0-9-]+'
+    date_format: null
+    date_group: null
+  - name: "Skyvern Blog"
+    url: "https://blog.skyvern.com"
+    # TODO: refine after sample firecrawl markdown
+    article_url_regex: 'https?://blog\.skyvern\.com/[a-z0-9-]+'
+    date_format: null
+    date_group: null
+
+  # --- Leaderboards / evals ---
+  - name: "LM Arena"
+    url: "https://lmarena.ai"
+    # TODO: refine after sample firecrawl markdown
+    article_url_regex: 'https?://(?:www\.)?lmarena\.ai/[a-z0-9-/]+'
+    date_format: null
+    date_group: null
+  - name: "SWE-bench"
+    url: "https://www.swebench.com"
+    # TODO: refine after sample firecrawl markdown
+    article_url_regex: 'https?://(?:www\.)?swebench\.com/[a-z0-9-/]+'
+    date_format: null
+    date_group: null
+  - name: "ARC Prize"
+    url: "https://arcprize.org"
+    # TODO: refine after sample firecrawl markdown
+    article_url_regex: 'https?://arcprize\.org/[a-z0-9-/]+'
+    date_format: null
+    date_group: null
+  - name: "Artificial Analysis"
+    url: "https://artificialanalysis.ai"
+    # TODO: refine after sample firecrawl markdown
+    article_url_regex: 'https?://(?:www\.)?artificialanalysis\.ai/[a-z0-9-/]+'
+    date_format: null
+    date_group: null
+
+  # --- News aggregators (no-feed) ---
+  - name: "AlphaSignal"
+    url: "https://alphasignal.ai"
+    # TODO: refine after sample firecrawl markdown
+    article_url_regex: 'https?://(?:www\.)?alphasignal\.ai/[a-z0-9-/]+'
+    date_format: null
+    date_group: null
+  - name: "Last Week in AI"
+    url: "https://lastweekin.ai"
+    # TODO: refine after sample firecrawl markdown
+    article_url_regex: 'https?://(?:www\.)?lastweekin\.ai/[a-z0-9-/]+'
+    date_format: null
+    date_group: null
+  - name: "MIT Tech Review (CN)"
+    url: "https://www.mittrchina.com"
+    # TODO: refine after sample firecrawl markdown
+    article_url_regex: 'https?://(?:www\.)?mittrchina\.com/[a-z0-9-/]+'
+    date_format: null
+    date_group: null
