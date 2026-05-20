@@ -37,7 +37,12 @@ def scrape(url: str) -> dict:
     """
     app = _client()
     try:
-        resp = app.scrape_url(url, formats=["markdown"], only_main_content=True)
+        # firecrawl-py v4 renamed the method to `scrape`; the v1/v2
+        # `scrape_url` was removed. The response is a `Document` pydantic
+        # object — `_get` reads attrs via getattr, so the downstream
+        # unwrap (`data`, `success`, `markdown`, `metadata`, etc.) keeps
+        # working without an explicit version branch.
+        resp = app.scrape(url, formats=["markdown"], only_main_content=True)
     except Exception as e:
         raise RuntimeError(f"Firecrawl scrape failed for {url}: {e}") from e
 

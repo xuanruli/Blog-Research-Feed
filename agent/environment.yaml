@@ -11,7 +11,7 @@ config:
     apt:
       # ffmpeg: youtube-transcript-api fallback + podcast audio pipeline.
       - ffmpeg
-      # jq: agent uses it in bash pipelines (`brf fetch rss | jq ...`).
+      # jq: agent uses it in bash pipelines (`brf fetch-all` → jq on index.json).
       - jq
     pip:
       # Pin setuptools<72 first — defensive in case any wheel needs a
