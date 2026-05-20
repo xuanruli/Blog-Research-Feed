@@ -11,6 +11,7 @@ Known-broken and summary-only feeds are hardcoded from ``SOURCES_HEALTH.md``
 """
 from __future__ import annotations
 
+import os
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
@@ -85,8 +86,26 @@ _SUMMARY_NORM = {_norm(u) for u in SUMMARY_ONLY_FEEDS}
 
 
 def _default_opml_path() -> Path:
-    """Repo root's ``sources.opml`` (one dir up from this package)."""
-    return Path(__file__).resolve().parent.parent / "sources.opml"
+    """Find ``sources.opml`` — explicit override, mounted resource, or bundled.
+
+    Priority:
+
+    1. ``$BRF_SOURCES_OPML`` env var (explicit path)
+    2. ``/workspace/sources.opml`` (orchestrator-mounted, if present)
+    3. Package data: ``importlib.resources.files('brf') / 'sources.opml'``
+       (always present in a normal pip install)
+    """
+    explicit = os.environ.get("BRF_SOURCES_OPML")
+    if explicit:
+        return Path(explicit)
+    mounted = Path("/workspace/sources.opml")
+    if mounted.is_file():
+        return mounted
+    # importlib.resources path → may be a real Path on disk, or a Traversable
+    # for zip-installed packages. Both work with ET.parse via str().
+    from importlib.resources import files
+
+    return Path(str(files("brf") / "sources.opml"))
 
 
 def _parse_opml(opml_path: Path) -> list[dict]:

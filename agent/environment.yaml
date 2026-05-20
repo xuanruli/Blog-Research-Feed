@@ -1,4 +1,4 @@
-name: blog-research-feed-env-v4  # v4: brf 0.1.1 (dropped feedparser → no sgmllib3k build issue)
+name: blog-research-feed-env-v5  # v5: brf 0.1.3 (sources.opml bundled in wheel, __version__ via importlib.metadata)
 config:
   type: cloud
 
@@ -35,4 +35,4 @@ config:
       #   3. bump the pin below to the new version
       #   4. bump this env's `name:` (v4 → v5) and re-run scripts/create_agent.py
       #   5. orchestrator picks up the new env by name on next cron run
-      - "blog-research-feed==0.1.1"
+      - "blog-research-feed==0.1.3"
