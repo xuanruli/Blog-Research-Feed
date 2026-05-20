@@ -11,7 +11,7 @@
 
 ---
 
-## 1. RSS 死链（共 9 条，仍 SKIP_FEEDS）
+## 1. RSS 死链 / 必须替换（共 15 条，SKIP_FEEDS）
 
 | Feed | 状态 | 处理 |
 |---|---|---|
@@ -25,20 +25,19 @@
 | `reddit.com/r/LocalLLaMA/.rss` | 403 | Reddit 封 UA；用 OAuth 或 old.reddit.com |
 | `aiera.com.cn/feed` / `zhidx.com/feed` | 500 | 服务端 error |
 | `geekpark.net/rss` / `feed.infoq.cn` | 连接失败 | 容器网络拒绝（可能墙）或站点拒绝 |
-
-## 1.5 RSS 坏但站点活 → FIRECRAWL_FALLBACK_FEEDS（共 3 条）
-
-`brf/rss.py` 会对这三条 Firecrawl 抓 `html_url` 然后正则提条目。$0.005/scrape × 3 × 30 = ~$0.45/月。
-
-| Feed | RSS 故障 | Fallback html_url | Article URL pattern |
-|---|---|---|---|
-| `www.jiqizhixin.com/rss` | XML 解析失败 | `www.jiqizhixin.com` | `/articles/YYYY-MM-DD-N` |
-| `jamesg.blog/hf-papers.xml` | 502（第三方 scraper 已死，HF 官方无 feed） | `huggingface.co/papers` | `/papers/YYMM.NNNNN`（arXiv ID） |
-| `blog.langchain.com/rss/` | 200 但返回 HTML | `blog.langchain.com` | kebab-case slug，排除 `category/`/`tag/`/`author/`/`page/`/`rss/` |
-| `jiqizhixin.com/rss` | 200 但 XML 解析失败 | 标签不匹配；机器之心 RSS 一直不稳，建议 Firecrawl |
 | `api.substack.com/feed/podcast/68003.rss` (Dwarkesh) | 404 | show ID 变了，去 dwarkesh.com 找新 RSS |
 | `feeds.transistor.fm/the-cognitive-revolution` | 404 | slug 变了 |
 | `feeds.megaphone.fm/CHTH3437994392` (ChinaTalk podcast) | 404 | show ID 失效 |
+
+## 1.5 RSS 坏但站点活 → FIRECRAWL_FALLBACK_FEEDS（共 3 条）
+
+`brf/rss.py` 对这三条 Firecrawl 抓 `html_url` 然后正则提条目。$0.005/scrape × 3 × 30 = ~$0.45/月。
+
+| Feed | RSS 故障 | Fallback html_url | Article URL pattern | Date |
+|---|---|---|---|---|
+| `www.jiqizhixin.com/rss` | XML 解析失败 | `www.jiqizhixin.com` | `/articles/YYYY-MM-DD-N` | URL 含日期 |
+| `jamesg.blog/hf-papers.xml` | 502（第三方 scraper 已死，HF 官方无 feed） | `huggingface.co/papers` | `/papers/YYMM.NNNNN`（arXiv ID） | 无（arXiv ID 只到月，弃用） |
+| `blog.langchain.com/rss/` | 200 但返回 HTML | `blog.langchain.com` | kebab-case slug + slug_blocklist | 无（URL 不带日期） |
 
 ---
 
@@ -128,7 +127,8 @@
 |---|---|
 | RSS FULL，直接可用 | ~35 |
 | RSS 摘要 only（需 Firecrawl 补正文） | 9 |
-| RSS 死链/失效（需替换或 Firecrawl） | 16 |
+| RSS 死链/失效（SKIP_FEEDS，等替换） | 15 |
+| RSS 坏但走 Firecrawl fallback | 3 |
 | RSS 陈旧但活着 | 9 |
 | 无 feed 站（Firecrawl 抓 index） | ~30 |
 | X-only 账号（需 X API / 桥接） | 45 |

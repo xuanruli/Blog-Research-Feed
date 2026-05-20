@@ -79,30 +79,49 @@ FIRECRAWL_FALLBACK_FEEDS: dict[str, dict] = {
         "date_format": "%Y-%m-%d",
         "date_group": 1,
         "source_title": "机器之心",
+        "slug_blocklist": frozenset(),
     },
     "https://jamesg.blog/hf-papers.xml": {
         "html_url": "https://huggingface.co/papers",
         "article_url_regex": re.compile(
-            r"https?://huggingface\.co/papers/(\d{4})\.\d{4,5}"
+            r"https?://huggingface\.co/papers/\d{4}\.\d{4,5}"
         ),
-        # arXiv ID YYMM (e.g. "2509") → approximate published month.
-        # Day defaults to 01. Coarse but fine for week-grain `since` filter.
-        "date_format": "yymm",
-        "date_group": 1,
+        # arXiv IDs encode YYMM but not the day. Deriving "2025-09-01"
+        # from "2509" makes a `since=2025-09-15` filter let in the
+        # entire month — false sense of freshness. Better to emit
+        # whatever shows up on the index page (newest-first), capped
+        # by FALLBACK_MAX_ITEMS_PER_FEED, and let the agent dedup.
+        "date_format": None,
+        "date_group": None,
         "source_title": "HF Daily Papers",
+        "slug_blocklist": frozenset(),
     },
     "https://blog.langchain.com/rss/": {
         "html_url": "https://blog.langchain.com",
-        # LangChain post slugs are kebab-case (≥7 chars); exclude
-        # category/tag/author/page index pages and the rss endpoint itself.
+        # LangChain post slugs are kebab-case. The negative lookahead
+        # drops obvious non-article paths (category / tag / author /
+        # paginated index / the rss endpoint itself). slug_blocklist
+        # below catches the boilerplate slugs we know about. The
+        # ≥1-hyphen requirement filters single-word top-level pages
+        # like /pricing — but a real post might still be ≥1 word; we
+        # can't pre-empt every false positive from this sandbox
+        # without sample markdown to test against.
         "article_url_regex": re.compile(
             r"https?://blog\.langchain\.(?:com|dev)/"
             r"(?!category/|tag/|author/|page/|rss/?$)"
-            r"[a-z0-9][a-z0-9-]{6,}/?(?:\?.*)?$"
+            r"([a-z0-9]+(?:-[a-z0-9]+)+)/?(?:\?.*)?$"
         ),
         "date_format": None,
         "date_group": None,
         "source_title": "LangChain Blog",
+        # Common boilerplate slugs that share the kebab-case shape but
+        # aren't blog posts. Extend as field experience reveals more.
+        "slug_blocklist": frozenset({
+            "about-us", "contact-us", "privacy-policy",
+            "terms-of-service", "terms-of-use", "case-studies",
+            "get-started", "sign-up", "sign-in", "log-in", "log-out",
+            "blog-rss", "all-posts",
+        }),
     },
 }
 
@@ -379,21 +398,17 @@ def _fetch_one(feed_meta: dict, since: Optional[datetime]) -> list[dict]:
 
 def _parse_fallback_date(raw: str, fmt: str) -> Optional[datetime]:
     """Parse a date captured from an article URL. Returns None on failure."""
-    if fmt == "yymm":
-        # arXiv-style YYMM, e.g. "2509" → 2025-09-01
-        if len(raw) < 4 or not raw.isdigit():
-            return None
-        try:
-            yy, mm = int(raw[:2]), int(raw[2:4])
-        except ValueError:
-            return None
-        if not 1 <= mm <= 12:
-            return None
-        return datetime(2000 + yy, mm, 1, tzinfo=timezone.utc)
     try:
         return datetime.strptime(raw, fmt).replace(tzinfo=timezone.utc)
     except ValueError:
         return None
+
+
+def _url_slug(url: str) -> str:
+    """Last non-empty path segment of ``url`` (no trailing slash, no query)."""
+    no_query = url.split("?", 1)[0].split("#", 1)[0]
+    parts = [p for p in no_query.rstrip("/").split("/") if p]
+    return parts[-1].lower() if parts else ""
 
 
 def _fetch_firecrawl_fallback(
@@ -432,6 +447,7 @@ def _fetch_firecrawl_fallback(
     date_format: Optional[str] = cfg.get("date_format")
     date_group: Optional[int] = cfg.get("date_group")
     source_title: str = cfg["source_title"]
+    slug_blocklist: frozenset[str] = cfg.get("slug_blocklist") or frozenset()
 
     since_cmp = since
     if since_cmp is not None and since_cmp.tzinfo is None:
@@ -450,6 +466,9 @@ def _fetch_firecrawl_fallback(
         if url in seen_urls:
             continue
         seen_urls.add(url)
+
+        if slug_blocklist and _url_slug(url) in slug_blocklist:
+            continue
 
         published_iso = ""
         if date_group is not None and date_format:

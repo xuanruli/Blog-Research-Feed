@@ -24,6 +24,13 @@ from .config import get_env
 
 _WHISPER_MAX_BYTES = 25 * 1024 * 1024  # OpenAI Whisper API hard limit
 
+# Heuristic ceiling on duration we'll bother downloading. bestaudio is
+# typically m4a/webm in the 50–80 kbps range; ~70 min × 80 kbps ≈ 40 MB
+# already exceeds the 25 MB Whisper cap. Use 70 min as the pre-download
+# bailout. Items longer than this get a no_transcript status rather
+# than a wasted yt-dlp transfer.
+_WHISPER_MAX_DURATION_SECS = 70 * 60
+
 
 _VIDEO_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
 
@@ -231,14 +238,28 @@ def _transcribe_whisper(path: str, api_key: str) -> tuple[Optional[str], Optiona
         return None, str(e)
 
 
-def _whisper_fallback(url: str) -> tuple[Optional[str], Optional[str]]:
+def _whisper_fallback(
+    url: str,
+    duration_seconds: Optional[int] = None,
+) -> tuple[Optional[str], Optional[str]]:
     """Download audio with yt-dlp and transcribe with Whisper.
+
+    ``duration_seconds`` is the video length captured earlier (yt-dlp /
+    oEmbed). If it exceeds ``_WHISPER_MAX_DURATION_SECS`` we bail out
+    before the download — at typical bitrates the file would blow the
+    25 MB Whisper limit anyway, so the download bandwidth would just
+    be wasted.
 
     Returns (text, error_message). Caller handles missing API key upstream.
     """
     api_key = get_env("OPENAI_API_KEY")
     if not api_key:
         return None, "OPENAI_API_KEY not set"
+    if duration_seconds is not None and duration_seconds > _WHISPER_MAX_DURATION_SECS:
+        return None, (
+            f"duration {duration_seconds}s exceeds Whisper pre-download "
+            f"ceiling {_WHISPER_MAX_DURATION_SECS}s; skipping yt-dlp"
+        )
     with tempfile.TemporaryDirectory(prefix="brf-yt-") as tmp:
         path, err = _download_audio_ytdlp(url, tmp)
         if not path:
@@ -295,7 +316,9 @@ def get_transcript(url: str) -> dict:
         result["error_message"] = err
         return result
 
-    whisper_text, whisper_err = _whisper_fallback(url)
+    whisper_text, whisper_err = _whisper_fallback(
+        url, duration_seconds=result.get("duration_seconds")
+    )
     if whisper_text:
         result["transcript"] = whisper_text
         result["transcript_source"] = "whisper"
