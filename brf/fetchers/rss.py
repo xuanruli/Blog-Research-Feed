@@ -42,10 +42,11 @@ _MD_LINK_RE = re.compile(r"\[([^\]\n]+)\]\((https?://[^)\s]+)\)")
 # ---------------------------------------------------------------------------
 # Firecrawl fallback config (ported from legacy brf/rss.py).
 #
-# TODO Phase 4: move this to FirecrawlIndexFetcher per design doc §12. The
-# only reason it still lives here is that Phase 2 ships ahead of the
-# sources.yaml `firecrawl_index:` block being wired up; once Phase 4
-# ships, delete this dict and let FirecrawlIndexFetcher own it.
+# Superseded by FirecrawlIndexFetcher (Phase 4). The three feeds keyed
+# here are already `enabled: false` in sources.yaml — their coverage
+# moved to the `firecrawl_index:` block. This dict is dormant in
+# production and kept only until a follow-up cleanup PR removes the
+# fallback lane + its tests outright.
 # ---------------------------------------------------------------------------
 DEFAULT_FIRECRAWL_FALLBACK: dict[str, dict] = {
     "https://www.jiqizhixin.com/rss": {
