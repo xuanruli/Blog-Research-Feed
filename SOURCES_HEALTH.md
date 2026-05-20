@@ -6,11 +6,12 @@
 - **FULL** = `content:encoded` 或长 `description`，RSS 直接用即可
 - **SUMMARY** = 仅 title / 短摘要 → **NEEDS_FIRECRAWL** 抓正文
 - **BROKEN** = 404 / 死链 / 返回 HTML → 需替换 URL
+- **FIRECRAWL_FALLBACK** = RSS 坏但站点活，`brf/rss.py` 走 Firecrawl 抓 index 页提条目
 - **NEEDS_X_API** = X-only 账号，无 feed
 
 ---
 
-## 1. RSS 死链 / 必须替换（共 12 条）
+## 1. RSS 死链（共 9 条，仍 SKIP_FEEDS）
 
 | Feed | 状态 | 处理 |
 |---|---|---|
@@ -18,14 +19,22 @@
 | `jxnl.co/feeds/feed.xml` | 404 | 站点结构变了，找新 feed URL |
 | `gwern.net/index.xml` | 301 → HTML | 用 `gwern.net/index` 不是 feed；查正确 endpoint |
 | `davidstarsilver.wordpress.com/feed/` | 200 但 0 items | 空 feed；可能博主清空 |
-| `blog.langchain.com/rss/` | 200 但返回 HTML | 试 `blog.langchain.dev/rss/`，否则 Firecrawl |
 | `www.braintrust.dev/blog/rss.xml` | 404 | 死链，Firecrawl 抓 `/blog` |
 | `blog.vllm.ai/feed.xml` | 404 | Next.js 站无 feed，Firecrawl |
 | `deeplearning.ai/the-batch/feed/` | 404 | feed path 变了，找新 endpoint |
-| `jamesg.blog/hf-papers.xml` | 502 | 第三方 scraper 挂了；可重试，或换 HF 官方 |
 | `reddit.com/r/LocalLLaMA/.rss` | 403 | Reddit 封 UA；用 OAuth 或 old.reddit.com |
 | `aiera.com.cn/feed` / `zhidx.com/feed` | 500 | 服务端 error |
 | `geekpark.net/rss` / `feed.infoq.cn` | 连接失败 | 容器网络拒绝（可能墙）或站点拒绝 |
+
+## 1.5 RSS 坏但站点活 → FIRECRAWL_FALLBACK_FEEDS（共 3 条）
+
+`brf/rss.py` 会对这三条 Firecrawl 抓 `html_url` 然后正则提条目。$0.005/scrape × 3 × 30 = ~$0.45/月。
+
+| Feed | RSS 故障 | Fallback html_url | Article URL pattern |
+|---|---|---|---|
+| `www.jiqizhixin.com/rss` | XML 解析失败 | `www.jiqizhixin.com` | `/articles/YYYY-MM-DD-N` |
+| `jamesg.blog/hf-papers.xml` | 502（第三方 scraper 已死，HF 官方无 feed） | `huggingface.co/papers` | `/papers/YYMM.NNNNN`（arXiv ID） |
+| `blog.langchain.com/rss/` | 200 但返回 HTML | `blog.langchain.com` | kebab-case slug，排除 `category/`/`tag/`/`author/`/`page/`/`rss/` |
 | `jiqizhixin.com/rss` | 200 但 XML 解析失败 | 标签不匹配；机器之心 RSS 一直不稳，建议 Firecrawl |
 | `api.substack.com/feed/podcast/68003.rss` (Dwarkesh) | 404 | show ID 变了，去 dwarkesh.com 找新 RSS |
 | `feeds.transistor.fm/the-cognitive-revolution` | 404 | slug 变了 |

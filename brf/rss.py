@@ -7,11 +7,22 @@ stdlib RSS/Atom parser (replaces ``feedparser`` to avoid its sdist-only
 Managed Agent env builder, so we keep brf install pure-PyPI-wheel).
 
 Known-broken and summary-only feeds are hardcoded from ``SOURCES_HEALTH.md``
-(see §1 and §2). Update those sets when the health check is re-run.
+(see §1, §1.5, and §2). Update those sets when the health check is re-run.
+
+Three feed-handling lanes:
+
+* ``SKIP_FEEDS`` — RSS dead and no good HTML fallback. Dropped silently.
+* ``FIRECRAWL_FALLBACK_FEEDS`` — RSS dead but the publisher's HTML index is
+  reachable. We scrape the index via Firecrawl and emit one item per
+  article link matching the configured pattern. Costs ~$0.005/call.
+* ``SUMMARY_ONLY_FEEDS`` — RSS live but only ships titles/short summaries.
+  We tag items with ``needs_firecrawl=True`` so the agent knows to
+  Firecrawl the article URL on its own.
 """
 from __future__ import annotations
 
 import os
+import re
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
@@ -23,7 +34,7 @@ from xml.etree import ElementTree as ET
 import httpx
 
 # ---------------------------------------------------------------------------
-# Health-check derived feed lists. Source: SOURCES_HEALTH.md §1 and §2.
+# Health-check derived feed lists. Source: SOURCES_HEALTH.md §1, §1.5, §2.
 # Keep these in sync with that doc; otherwise broken feeds will spam stderr
 # on every cron run and summary-only feeds won't get Firecrawl follow-up.
 # ---------------------------------------------------------------------------
@@ -34,21 +45,70 @@ SKIP_FEEDS: set[str] = {
     "https://jxnl.co/feeds/feed.xml",
     "https://gwern.net/index.xml",
     "https://davidstarsilver.wordpress.com/feed/",
-    "https://blog.langchain.com/rss/",
     "https://www.braintrust.dev/blog/rss.xml",
     "https://blog.vllm.ai/feed.xml",
     "https://www.deeplearning.ai/the-batch/feed/",
-    "https://jamesg.blog/hf-papers.xml",
     "https://www.reddit.com/r/LocalLLaMA/.rss",
     "https://aiera.com.cn/feed",
     "https://zhidx.com/feed",
     "https://www.geekpark.net/rss",
     "https://feed.infoq.cn",
-    "https://www.jiqizhixin.com/rss",
     "https://api.substack.com/feed/podcast/68003.rss",
     "https://feeds.transistor.fm/the-cognitive-revolution",
     "https://feeds.megaphone.fm/CHTH3437994392",
 }
+
+# §1.5: RSS broken but HTML index is reachable. Scrape via Firecrawl and
+# emit one item per article link matching the configured pattern. Each
+# entry maps the (broken) RSS URL to:
+#   - html_url:           the index page Firecrawl should scrape
+#   - article_url_regex:  matched against every markdown link on the page;
+#                         only matches are emitted as feed items
+#   - date_format:        Python strptime format applied to the captured
+#                         group, or the sentinel "yymm" for arXiv-style
+#                         IDs, or None if the URL carries no date
+#   - date_group:         which regex group holds the date (None if no
+#                         date is extractable)
+#   - source_title:       human-readable source name in the emitted items
+FIRECRAWL_FALLBACK_FEEDS: dict[str, dict] = {
+    "https://www.jiqizhixin.com/rss": {
+        "html_url": "https://www.jiqizhixin.com",
+        "article_url_regex": re.compile(
+            r"https?://www\.jiqizhixin\.com/articles/(\d{4}-\d{2}-\d{2})-\d+"
+        ),
+        "date_format": "%Y-%m-%d",
+        "date_group": 1,
+        "source_title": "机器之心",
+    },
+    "https://jamesg.blog/hf-papers.xml": {
+        "html_url": "https://huggingface.co/papers",
+        "article_url_regex": re.compile(
+            r"https?://huggingface\.co/papers/(\d{4})\.\d{4,5}"
+        ),
+        # arXiv ID YYMM (e.g. "2509") → approximate published month.
+        # Day defaults to 01. Coarse but fine for week-grain `since` filter.
+        "date_format": "yymm",
+        "date_group": 1,
+        "source_title": "HF Daily Papers",
+    },
+    "https://blog.langchain.com/rss/": {
+        "html_url": "https://blog.langchain.com",
+        # LangChain post slugs are kebab-case (≥7 chars); exclude
+        # category/tag/author/page index pages and the rss endpoint itself.
+        "article_url_regex": re.compile(
+            r"https?://blog\.langchain\.(?:com|dev)/"
+            r"(?!category/|tag/|author/|page/|rss/?$)"
+            r"[a-z0-9][a-z0-9-]{6,}/?(?:\?.*)?$"
+        ),
+        "date_format": None,
+        "date_group": None,
+        "source_title": "LangChain Blog",
+    },
+}
+
+# Cap per-source items to bound cost-amplification and dedup risk: index
+# pages can list dozens of stale links.
+FALLBACK_MAX_ITEMS_PER_FEED = 10
 
 # §2: RSS alive but summary-only. needs_firecrawl=True so downstream can
 # follow each item's link to fetch full text.
@@ -68,6 +128,10 @@ SUMMARY_MAX_CHARS = 500
 DEFAULT_TIMEOUT_SECS = 15
 MAX_WORKERS = 10
 
+# Markdown link extraction for FIRECRAWL_FALLBACK_FEEDS. We deliberately
+# disallow newlines inside the title so we don't span unrelated entries.
+_MD_LINK_RE = re.compile(r"\[([^\]\n]+)\]\((https?://[^)\s]+)\)")
+
 # XML namespaces. RSS 2.0 itself has no default namespace on its tags;
 # content:encoded uses the content namespace; Atom uses its own.
 NS = {
@@ -83,6 +147,7 @@ def _norm(u: str) -> str:
 
 _SKIP_NORM = {_norm(u) for u in SKIP_FEEDS}
 _SUMMARY_NORM = {_norm(u) for u in SUMMARY_ONLY_FEEDS}
+_FALLBACK_NORM = {_norm(u): cfg for u, cfg in FIRECRAWL_FALLBACK_FEEDS.items()}
 
 
 def _default_opml_path() -> Path:
@@ -312,6 +377,105 @@ def _fetch_one(feed_meta: dict, since: Optional[datetime]) -> list[dict]:
     return items
 
 
+def _parse_fallback_date(raw: str, fmt: str) -> Optional[datetime]:
+    """Parse a date captured from an article URL. Returns None on failure."""
+    if fmt == "yymm":
+        # arXiv-style YYMM, e.g. "2509" → 2025-09-01
+        if len(raw) < 4 or not raw.isdigit():
+            return None
+        try:
+            yy, mm = int(raw[:2]), int(raw[2:4])
+        except ValueError:
+            return None
+        if not 1 <= mm <= 12:
+            return None
+        return datetime(2000 + yy, mm, 1, tzinfo=timezone.utc)
+    try:
+        return datetime.strptime(raw, fmt).replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
+def _fetch_firecrawl_fallback(
+    feed_meta: dict,
+    cfg: dict,
+    since: Optional[datetime],
+) -> list[dict]:
+    """Scrape ``cfg['html_url']`` via Firecrawl and emit article items.
+
+    Used for sources whose RSS endpoint is broken but whose HTML index is
+    reachable (see ``FIRECRAWL_FALLBACK_FEEDS``). Returns at most
+    ``FALLBACK_MAX_ITEMS_PER_FEED`` items, preserving the order they appear
+    on the index page (which is typically newest-first).
+
+    Errors (firecrawl unavailable, scrape failure, key missing) are logged
+    to stderr; the function returns an empty list rather than raising.
+    """
+    try:
+        from .firecrawl_client import scrape as fc_scrape
+    except Exception as exc:
+        print(
+            f"[rss] firecrawl unavailable, dropping fallback {feed_meta['xml_url']}: {exc}",
+            file=sys.stderr,
+        )
+        return []
+
+    html_url = cfg["html_url"]
+    try:
+        resp = fc_scrape(html_url)
+    except Exception as exc:
+        print(f"[rss] firecrawl scrape failed for {html_url}: {exc}", file=sys.stderr)
+        return []
+
+    markdown = resp.get("markdown") or ""
+    pattern: re.Pattern[str] = cfg["article_url_regex"]
+    date_format: Optional[str] = cfg.get("date_format")
+    date_group: Optional[int] = cfg.get("date_group")
+    source_title: str = cfg["source_title"]
+
+    since_cmp = since
+    if since_cmp is not None and since_cmp.tzinfo is None:
+        since_cmp = since_cmp.replace(tzinfo=timezone.utc)
+
+    items: list[dict] = []
+    seen_urls: set[str] = set()
+    for m in _MD_LINK_RE.finditer(markdown):
+        title = m.group(1).strip()
+        # Markdown URLs sometimes inherit trailing punctuation from surrounding
+        # prose; strip the common offenders.
+        url = m.group(2).strip().rstrip(".,;)")
+        article_m = pattern.match(url)
+        if not article_m:
+            continue
+        if url in seen_urls:
+            continue
+        seen_urls.add(url)
+
+        published_iso = ""
+        if date_group is not None and date_format:
+            captured = article_m.group(date_group)
+            dt = _parse_fallback_date(captured, date_format)
+            if dt is not None:
+                if since_cmp is not None and dt < since_cmp:
+                    continue
+                published_iso = dt.isoformat()
+
+        items.append({
+            "source": source_title,
+            "source_url": html_url,
+            "title": title,
+            "url": url,
+            "published": published_iso,
+            "summary": "",
+            "full_text": None,
+            "needs_firecrawl": True,
+        })
+        if len(items) >= FALLBACK_MAX_ITEMS_PER_FEED:
+            break
+
+    return items
+
+
 def fetch_recent(
     since: datetime | None = None,
     opml_path: Path | None = None,
@@ -321,14 +485,28 @@ def fetch_recent(
     Each item dict contains: ``source``, ``source_url``, ``title``, ``url``,
     ``published`` (ISO8601), ``summary`` (<=500 chars), ``full_text``
     (content:encoded if present, else None), and ``needs_firecrawl`` (True
-    for summary-only feeds per ``SOURCES_HEALTH.md`` §2).
+    for summary-only feeds per ``SOURCES_HEALTH.md`` §2 and for all items
+    emitted via the Firecrawl fallback).
 
     Feeds listed in ``SKIP_FEEDS`` (``SOURCES_HEALTH.md`` §1) are skipped.
+    Feeds listed in ``FIRECRAWL_FALLBACK_FEEDS`` (§1.5) are routed through
+    a Firecrawl scrape of the publisher's HTML index instead of httpx.
     Per-feed errors are logged to stderr; this function never raises.
     """
     opml_path = opml_path or _default_opml_path()
     feeds = _parse_opml(opml_path)
-    live_feeds = [f for f in feeds if _norm(f["xml_url"]) not in _SKIP_NORM]
+
+    live_feeds: list[dict] = []
+    fallback_feeds: list[tuple[dict, dict]] = []
+    for f in feeds:
+        n = _norm(f["xml_url"])
+        if n in _SKIP_NORM:
+            continue
+        fallback_cfg = _FALLBACK_NORM.get(n)
+        if fallback_cfg is not None:
+            fallback_feeds.append((f, fallback_cfg))
+        else:
+            live_feeds.append(f)
 
     all_items: list[dict] = []
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
@@ -342,6 +520,17 @@ def fetch_recent(
                     f"[rss] worker crashed for {feed_meta['xml_url']}: {exc}",
                     file=sys.stderr,
                 )
+
+    # Firecrawl fallbacks run sequentially: firecrawl-py thread safety is
+    # not guaranteed and there are only a handful (~3) of them per run.
+    for feed_meta, cfg in fallback_feeds:
+        try:
+            all_items.extend(_fetch_firecrawl_fallback(feed_meta, cfg, since))
+        except Exception as exc:
+            print(
+                f"[rss] fallback crashed for {feed_meta['xml_url']}: {exc}",
+                file=sys.stderr,
+            )
 
     return all_items
 
