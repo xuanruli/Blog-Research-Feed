@@ -1,0 +1,13 @@
+name: blog-research-feed-reviewer
+model:
+  id: claude-opus-4-7
+system: "@./agent/reviewer_prompt.md"
+description: >
+  Subagent. Reads the curator's draft report (/tmp/draft.md) plus the
+  reader-summary corpus, and returns PASS / REVISE with concrete ISSUES
+  and MISSED_CANDIDATES. Spawned 1-2× per session (1st review, optional
+  2nd after curator revises). Opus 4.7 because the quality bar is the
+  whole point of review.
+
+tools:
+  - type: agent_toolset_20260401
