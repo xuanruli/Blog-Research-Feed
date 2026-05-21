@@ -19,8 +19,8 @@ rss:
   - { name: "Anthropic Engineering (community scraper)", url: "https://raw.githubusercontent.com/conoro/anthropic-engineering-rss-feed/main/feed.xml", enabled: false, reason: "conoro repo 404; covered by firecrawl_index anthropic.com/engineering" }
   - { name: "HumanLayer 12-Factor Agents (commits)", url: "https://github.com/humanlayer/12-factor-agents/commits.atom" }
   - { name: "Thorsten Ball - Register Spill", url: "https://registerspill.thorstenball.com/feed" }
-  - { name: "AI Futures Project (AI 2027)", url: "https://blog.ai-futures.org/feed" }
-  - { name: "Astral Codex Ten (Scott Alexander)", url: "https://www.astralcodexten.com/feed" }
+  - { name: "AI Futures Project (AI 2027)", url: "https://blog.ai-futures.org/feed", enabled: false, reason: "Forecasting/policy commentary, not engineering signal" }
+  - { name: "Astral Codex Ten (Scott Alexander)", url: "https://www.astralcodexten.com/feed", enabled: false, reason: "Rationalist commentary, not engineering signal" }
   - { name: "David Silver",              url: "https://davidstarsilver.wordpress.com/feed/", enabled: false, reason: "RSS dead per SOURCES_HEALTH.md §1" }
 
   # --- Individual researcher blogs ---
@@ -37,9 +37,17 @@ rss:
   - { name: "Gwern",                     url: "https://gwern.net/index.xml", enabled: false, reason: "RSS dead per SOURCES_HEALTH.md §1" }
   - { name: "Neel Nanda",                url: "https://www.neelnanda.io/blog?format=rss" }
   - { name: "Embrace The Red",           url: "https://embracethered.com/blog/index.xml", summary_only: true }
-  - { name: "ChinaTalk",                 url: "https://www.chinatalk.media/feed" }
+  - { name: "ChinaTalk",                 url: "https://www.chinatalk.media/feed", enabled: false, reason: "Geopolitics, not engineering signal" }
   - { name: "Matt Pocock (blog)",        url: "https://www.mattpocock.com/rss.xml" }
   - { name: "Matt Pocock (YouTube)",     url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCswG6FSbgZjbWtdf_hMLaow" }
+
+  # --- Multimodal / VLM / vision (added for VLM+video-agent focus) ---
+  - { name: "Hugging Face Blog",         url: "https://huggingface.co/blog/feed.xml" }
+  - { name: "Roboflow Blog",             url: "https://blog.roboflow.com/rss/" }
+
+  # --- Claude Code / coding-agent first-party release notes ---
+  - { name: "Claude Code releases",      url: "https://github.com/anthropics/claude-code/releases.atom" }
+  - { name: "Codex (OpenAI CLI) releases", url: "https://github.com/openai/codex/releases.atom" }
 
   # --- OSS tool releases: Agent frameworks ---
   - { name: "LangChain blog",            url: "https://blog.langchain.com/rss/", enabled: false, reason: "RSS broken; covered by firecrawl_index" }
@@ -89,19 +97,25 @@ rss:
   - { name: "MCP spec commits",          url: "https://github.com/modelcontextprotocol/modelcontextprotocol/commits.atom" }
 
   # --- News aggregators: English ---
-  - { name: "AI News by smol.ai",        url: "https://buttondown.com/ainews/rss" }
+  # Most aggregators removed (TLDR / Import AI / TheSequence / AI News by smol.ai)
+  # — they're digests of news, not original engineering/research signal. Keep
+  # only HN as a title-only second-order discovery channel.
+  - { name: "AI News by smol.ai",        url: "https://buttondown.com/ainews/rss", enabled: false, reason: "Aggregator/digest, not original signal" }
   - { name: "The Batch (Andrew Ng)",     url: "https://www.deeplearning.ai/the-batch/feed/", enabled: false, reason: "RSS dead per SOURCES_HEALTH.md §1" }
-  - { name: "Import AI (Jack Clark)",    url: "https://jack-clark.net/feed/" }
-  - { name: "TLDR AI",                   url: "https://tldr.tech/api/rss/ai", summary_only: true }
-  - { name: "TheSequence",               url: "https://thesequence.substack.com/feed" }
+  - { name: "Import AI (Jack Clark)",    url: "https://jack-clark.net/feed/", enabled: false, reason: "Weekly digest of news, not original signal" }
+  - { name: "TLDR AI",                   url: "https://tldr.tech/api/rss/ai", enabled: false, reason: "Newsletter aggregator, not original signal" }
+  - { name: "TheSequence",               url: "https://thesequence.substack.com/feed", enabled: false, reason: "Aggregator/digest" }
   - { name: "HF Daily Papers",           url: "https://jamesg.blog/hf-papers.xml", enabled: false, reason: "RSS broken; covered by firecrawl_index" }
   - { name: "Hacker News front page",    url: "https://news.ycombinator.com/rss", summary_only: true }
   - { name: "r/LocalLLaMA",              url: "https://www.reddit.com/r/LocalLLaMA/.rss", enabled: false, reason: "403 — Reddit blocks cloud UA" }
-  - { name: "Stratechery",               url: "https://stratechery.com/feed/", summary_only: true }
-  - { name: "The Pragmatic Engineer",    url: "https://newsletter.pragmaticengineer.com/feed" }
-  - { name: "Marginal Revolution",       url: "https://marginalrevolution.com/feed" }
+  - { name: "Stratechery",               url: "https://stratechery.com/feed/", enabled: false, reason: "Business strategy, not engineering signal" }
+  - { name: "The Pragmatic Engineer",    url: "https://newsletter.pragmaticengineer.com/feed", enabled: false, reason: "General software engineering, AI content too sparse" }
+  - { name: "Marginal Revolution",       url: "https://marginalrevolution.com/feed", enabled: false, reason: "Economics, not engineering signal" }
 
   # --- News aggregators: Chinese ---
+  # 量子位 / 机器之心: keep — they mix marketing news with paper deep-dives and
+  # 大模型 weekly summaries that the agent can cherry-pick. Other Chinese
+  # aggregators stayed off (dead feeds).
   - { name: "机器之心",                  url: "https://www.jiqizhixin.com/rss", enabled: false, reason: "RSS broken; covered by firecrawl_index" }
   - { name: "量子位 QbitAI",             url: "https://www.qbitai.com/feed", summary_only: true }
   - { name: "新智元 AI Era",             url: "https://aiera.com.cn/feed", enabled: false, reason: "RSS dead per SOURCES_HEALTH.md §1" }
@@ -110,36 +124,61 @@ rss:
   - { name: "InfoQ 中文",                url: "https://feed.infoq.cn", enabled: false, reason: "RSS dead per SOURCES_HEALTH.md §1" }
 
 x:
-  # Core ~10 bulk-fetched daily. The remaining ~35 X-only handles from
-  # sources.md §5 / SOURCES_HEALTH.md §6 stay agent-callable via the
-  # legacy `brf fetch x-user --handle X` CLI, listed in the system prompt.
+  # Frontier-shaping handles that post research / engineering / interview
+  # signal. Avoid pure-business commentators. ~18 handles × 2 reads/day ≈
+  # $0.18/day. The wider list in SOURCES_HEALTH.md §6 stays agent-callable
+  # via `brf fetch x-user --handle X`.
   handles:
+    # Hands-on engineering essayists
     - karpathy
     - simonw
-    - natolambert
-    - sleepinyourhat
-    - AmandaAskell
     - hamelhusain
     - eugeneyan
     - swyx
-    - repligate
+    - jxnl              # Jason Liu — instructor / structured output
+    - mattpocockuk      # TypeScript + AI engineering skills
     - jeremyphoward
+    # Frontier voices (model labs / coding agents)
+    - bcherny           # Claude Code founder
+    - natolambert
+    - sleepinyourhat
+    - AmandaAskell
+    - ManusAI           # Manus AI official
+    - peakji            # Yichao "Peak" Ji — Manus co-founder
+    # Multimodal / VLM / video-gen focus
+    - DrJimFan          # NVIDIA — VLM + robotics
+    - giffmana          # Lucas Beyer — VLM expert
+    - _akhaliq          # AK — daily papers, multimodal heavy
+    - merveenoyan       # HF VLM team
+    - repligate         # Janus — capability commentary
 
 youtube:
-  # Start with two channels; YouTube channel_ids can be added freely here
-  # without code change. Extract a channel_id from the channel page source
-  # ("externalId") or its RSS URL.
+  # Hands-on engineering tutorials + paper deep-dives + long-form interviews
+  # + multimodal/VLM coverage. YouTube fetches are free (Atom feed), so
+  # expanding here costs nothing.
   channels:
-    - { name: "Matt Pocock", channel_id: "UCswG6FSbgZjbWtdf_hMLaow" }
-    - { name: "Andrej Karpathy", channel_id: "UCXUPKJO5MZQN11PqgIvyuvQ" }
-    # TODO: add Yannic Kilcher, Dwarkesh, 3Blue1Brown, etc. once Phase 3
-    # YouTubeFetcher lands.
+    # Hands-on engineering / coding agents
+    - { name: "Matt Pocock",      channel_id: "UCswG6FSbgZjbWtdf_hMLaow" }
+    - { name: "Sam Witteveen",    channel_id: "UC55ODQSvARtgSyc8ThfiepQ" }
+    # Paper deep-dives + research explainers
+    - { name: "Andrej Karpathy",  channel_id: "UCXUPKJO5MZQN11PqgIvyuvQ" }
+    - { name: "Yannic Kilcher",   channel_id: "UCZHmQk67mSJgfCCTn7xBfew" }
+    - { name: "AI Explained",     channel_id: "UCNJ1Ymd5yFuUPtn21xtRbbw" }
+    - { name: "bycloud",          channel_id: "UCgfe2ooZD3VJPB6aJAnuQng" }
+    - { name: "Two Minute Papers", channel_id: "UCbfYPyITQ-7l4upoX8nvctg" }
+    - { name: "Discover AI (code4AI)", channel_id: "UCfOvNb3xj28SNqPQ_JIbumg" }
+    # Long-form interviews (frontier-shaping voices)
+    - { name: "Dwarkesh Patel",   channel_id: "UCXl4i9dYBrFOabk0xGmbkRA" }
+    # Multimodal / VLM
+    - { name: "Jim Fan (NVIDIA)", channel_id: "UC4vr9HaKGCYLmmiCXnzac7A" }
+    # Math intuition
+    - { name: "3Blue1Brown",      channel_id: "UCYO_jab_esuFRV4b17AJtAw" }
 
 podcasts:
   - { name: "Latent Space",         url: "https://api.substack.com/feed/podcast/1084089.rss" }
-  - { name: "Dwarkesh Podcast",     url: "https://api.substack.com/feed/podcast/68003.rss",       enabled: false, reason: "RSS dead per SOURCES_HEALTH.md §1; need replacement URL" }
+  - { name: "Dwarkesh Podcast",     url: "https://api.substack.com/feed/podcast/68003.rss",       enabled: false, reason: "RSS dead; Dwarkesh blog feed already covers in rss block" }
   - { name: "Cognitive Revolution", url: "https://feeds.transistor.fm/the-cognitive-revolution", enabled: false, reason: "RSS dead per SOURCES_HEALTH.md §1; need replacement URL" }
-  - { name: "ChinaTalk",            url: "https://feeds.megaphone.fm/CHTH3437994392",            enabled: false, reason: "RSS dead per SOURCES_HEALTH.md §1; need replacement URL" }
+  - { name: "ChinaTalk",            url: "https://feeds.megaphone.fm/CHTH3437994392",            enabled: false, reason: "Geopolitics, not engineering signal" }
 
 firecrawl_index:
   # Entries already proven in FIRECRAWL_FALLBACK_FEEDS (brf/rss.py).
@@ -345,21 +384,5 @@ firecrawl_index:
     date_group: null
 
   # --- News aggregators (no-feed) ---
-  - name: "AlphaSignal"
-    url: "https://alphasignal.ai"
-    # TODO: refine after sample firecrawl markdown
-    article_url_regex: 'https?://(?:www\.)?alphasignal\.ai/[a-z0-9-/]+'
-    date_format: null
-    date_group: null
-  - name: "Last Week in AI"
-    url: "https://lastweekin.ai"
-    # TODO: refine after sample firecrawl markdown
-    article_url_regex: 'https?://(?:www\.)?lastweekin\.ai/[a-z0-9-/]+'
-    date_format: null
-    date_group: null
-  - name: "MIT Tech Review (CN)"
-    url: "https://www.mittrchina.com"
-    # TODO: refine after sample firecrawl markdown
-    article_url_regex: 'https?://(?:www\.)?mittrchina\.com/[a-z0-9-/]+'
-    date_format: null
-    date_group: null
+  # AlphaSignal / Last Week in AI / MIT Tech Review CN removed —
+  # aggregators/industry news, not original engineering signal.
