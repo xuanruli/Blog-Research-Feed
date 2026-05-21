@@ -1,0 +1,15 @@
+name: blog-research-feed-reader
+model:
+  id: claude-sonnet-4-6
+system: "@./agent/reader_prompt.md"
+description: >
+  Subagent. Reads one long-form item (blog / paper / video transcript /
+  podcast transcript) from /tmp/feed/full/<id>.* and returns a structured
+  short summary (verdict / category / why_useful / bullets / one_liner).
+  Spawned 20-30× in parallel by the curator coordinator.
+
+tools:
+  # bash is enough — reader cats the file. read/grep/web_search/web_fetch
+  # come along with the toolset, but reader prompt restricts use to local
+  # files only (no network calls — curator already drilled).
+  - type: agent_toolset_20260401
