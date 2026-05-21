@@ -1,4 +1,4 @@
-name: blog-research-feed-env-v7  # v7: brf 0.1.4 — config.py auto-loads /mnt/session/uploads/workspace/.env (Managed Agents mount prefix). v6 shipped FIRECRAWL_FALLBACK_FEEDS / YouTube Whisper / Matt Pocock.
+name: blog-research-feed-env-v8  # v8: brf 0.2.4 — fetch-all/fetch-full unified pipeline (Phase 2-5: RssFetcher + X/YouTube/Podcast/FirecrawlIndex fetchers, firecrawl-py v4 SDK fix, refocused sources). v5 was the last actually-provisioned env (brf 0.1.4). v6 / v7 names were drafted but never created — environment.yaml is only authoritative after `scripts/create_agent.py` actually pushes it.
 config:
   type: cloud
 
@@ -15,24 +15,24 @@ config:
       - jq
     pip:
       # Pin setuptools<72 first — defensive in case any wheel needs a
-      # legacy-setuptools build env. (As of brf 0.1.1 this is mostly
-      # unnecessary because we dropped feedparser → no sgmllib3k.)
+      # legacy-setuptools build env.
       - "setuptools<72"
       - "wheel"
       # Install brf from PyPI. Published from this repo via
       # `python -m build && twine upload dist/*`.
       #
-      # v0.1.1 changes: dropped feedparser dep, replaced with stdlib
-      # xml.etree-based RSS/Atom parser in brf/rss.py. Reason:
-      # feedparser's transitive sgmllib3k is sdist-only and fails to
-      # build in Anthropic's env-build pip-with-isolation (silent
-      # failure, no logs). brf 0.1.0 install crashed at sgmllib3k step;
-      # 0.1.1 installs cleanly because every dep is wheel-available.
+      # 0.2.x = fetcher refactor (BRF_FETCHER_DESIGN.md):
+      #   0.2.0  scaffolding (FeedItem + ABC + Aggregator skeleton)
+      #   0.2.1  RssFetcher
+      #   0.2.2  X / YouTube / Podcast fetchers
+      #   0.2.3  FirecrawlIndexFetcher
+      #   0.2.4  firecrawl-py v4 SDK fix (scrape_url -> scrape), HF-papers
+      #          yymm month-end stamp, URL-fragment dedupe in firecrawl_index
       #
       # To deploy a new brf version:
       #   1. bump `version` in pyproject.toml
       #   2. `python -m build && twine upload dist/*`
       #   3. bump the pin below to the new version
-      #   4. bump this env's `name:` (v4 → v5) and re-run scripts/create_agent.py
+      #   4. bump this env's `name:` (vN → vN+1) and re-run scripts/create_agent.py
       #   5. orchestrator picks up the new env by name on next cron run
-      - "blog-research-feed==0.1.4"
+      - "blog-research-feed==0.2.4"
