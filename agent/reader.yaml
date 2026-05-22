@@ -6,7 +6,7 @@ description: >
   Subagent. Reads 1-3 long-form items from /tmp/feed/full/<id>.* and
   returns a structured short summary block per item (verdict / category
   / why_useful / bullets / one_liner). Spawned in parallel by the
-  curator coordinator. The orchestrator auto-archives each reader thread
+  curator coordinator. The coordinator auto-archives each reader thread
   the moment it returns its result — readers are strictly fire-and-
   forget; coordinator does NOT send_to_agent for follow-up.
 

@@ -7,7 +7,7 @@ Auto-loads .env from (in order, first hit wins):
    Anthropic prefixes our session-resource ``mount_path`` with
    ``/mnt/session/uploads/`` (documented behavior; verified in run #3
    where the agent had to ``set -a; . /mnt/session/uploads/workspace/.env``
-   to load the secrets that orchestrator uploaded).
+   to load the secrets that cron runner uploaded).
 3. ``/workspace/.env`` — alternate container path (defensive; what we set
    as ``mount_path`` in ``sessions.create``, kept as fallback in case
    Anthropic stops prefixing).

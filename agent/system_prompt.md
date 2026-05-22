@@ -21,7 +21,7 @@ Reviewer **不会**被自动 archive——所以你可以做第 2 轮 review（`
 
 ### Thread slot 预算
 
-Session 有 **25 个并发 thread 上限**（docs §348）。orchestrator 自动 archive 完工 reader 释放 slot，所以滚动来看你可以 spawn 远多于 25 个 reader——只要你不一次同时开超过 25 个。
+Session 有 **25 个并发 thread 上限**（docs §348）。coordinator 自动 archive 完工 reader 释放 slot，所以滚动来看你可以 spawn 远多于 25 个 reader——只要你不一次同时开超过 25 个。
 
 约束**只一条**：**永远留 ≥ 2 个 slot 给 reviewer**（当前 review + 可能的第 2 轮）。除此之外你自己决定 batch 多少篇 / spawn 多少个 reader。
 

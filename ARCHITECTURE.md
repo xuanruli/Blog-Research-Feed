@@ -6,7 +6,7 @@ the container** (via environment pip packages) and the agent invokes it from
 bash directly, piping subcommands through `jq`.
 
 > **v0 → v1 note**: this doc was rewritten when the architecture moved from
-> "7 custom tools dispatched by an orchestrator-side CLI" to "Files-API mount +
+> "7 custom tools dispatched by an cron-side CLI" to "Files-API mount +
 > in-container CLI + bash pipelines". The earlier model had no API keys in the
 > container; this model puts a session-scoped `.env` in the container via
 > Files API. Tradeoff discussion in §3.
@@ -17,7 +17,7 @@ bash directly, piping subcommands through `jq`.
  GitHub Actions cron (09:00 UTC daily)
         │
         ▼
- .github/workflows/daily.yml  ─▶  `python -m orchestrator.daily`  (orchestrator on runner)
+ .github/workflows/daily.yml  ─▶  `python -m cron.daily`  (cron runner on the GitHub runner)
                                        │
                                        │ 1. build .env payload from runner env
                                        │ 2. client.beta.files.upload(.env)
@@ -72,7 +72,7 @@ bash directly, piping subcommands through `jq`.
   - Every subcommand prints JSON to stdout, errors to stderr, non-zero exit
     on failure → pipes cleanly with `jq` and `|`.
 
-- **Cron orchestrator** (`orchestrator/daily.py`, ~150 lines)
+- **Cron runner** (`cron/daily.py`, ~150 lines)
   - Per run: build `.env` payload from `PASSTHROUGH_KEYS`, upload via Files
     API, create session with `resources=[file mount @ /workspace/.env]`,
     send kickoff `user.message`, stream events for logging, delete the file
@@ -83,15 +83,15 @@ bash directly, piping subcommands through `jq`.
 - **GitHub Action** (`.github/workflows/daily.yml`)
   - `cron: "0 9 * * *"` + `workflow_dispatch:` for manual.
   - Pulls all 7 secrets from GitHub Secrets into the runner's env.
-  - Runs `python -m orchestrator.daily`.
+  - Runs `python -m cron.daily`.
 
 ## 3. Secrets model (and the tradeoff vs v0)
 
-**v1 (current)**: `.env` rendered by orchestrator on each run, uploaded via
+**v1 (current)**: `.env` rendered by cron runner on each run, uploaded via
 Files API, mounted read-only at `/workspace/.env` inside the agent's
 container. Anthropic stores the file encrypted at rest, scoped to your
 workspace, accessible only when an authenticated session references its ID.
-Deleted by the orchestrator at clean exit.
+Deleted by the cron runner at clean exit.
 
 **Threat model considerations**:
 - Container code (including anything `brf` runs) CAN read `/workspace/.env`.
@@ -114,10 +114,10 @@ Deleted by the orchestrator at clean exit.
   on crash/timeout the file persists (intentional — for debugging).
 
 **v0 alternative** (rejected): 7 custom tools, agent emits
-`agent.custom_tool_use` events, orchestrator executes `brf` locally with
+`agent.custom_tool_use` events, cron runner executes `brf` locally with
 API keys in the GitHub runner's env, sends results back. Pro: zero keys in
 container. Con: every CLI call is an SSE round-trip (~200ms latency),
-no `brf X | jq | brf Y` composition, orchestrator was ~340 lines of
+no `brf X | jq | brf Y` composition, cron runner was ~340 lines of
 dispatch code. v1 trades a contained secret-surface for much better
 agent ergonomics + ~200 fewer lines of code.
 
@@ -144,7 +144,7 @@ agent ergonomics + ~200 fewer lines of code.
 
 ## 5. Env var routing
 
-| Var | Lives in GitHub Secrets | Used by orchestrator | Forwarded to container `.env` |
+| Var | Lives in GitHub Secrets | Used by cron runner | Forwarded to container `.env` |
 |---|:-:|:-:|:-:|
 | `ANTHROPIC_API_KEY` | ✅ | ✅ (create session, upload file) | ❌ |
 | `FIRECRAWL_API_KEY` | ✅ | ❌ | ✅ |
@@ -153,14 +153,14 @@ agent ergonomics + ~200 fewer lines of code.
 | `SLACK_WEBHOOK_URL` | ✅ | ❌ | ✅ |
 
 `ANTHROPIC_AGENT_ID` and `ANTHROPIC_ENV_ID` are **NOT** stored as
-secrets — `orchestrator.daily` resolves them at runtime by `name` (from
+secrets — `cron.daily` resolves them at runtime by `name` (from
 `agent/agent.yaml` and `agent/environment.yaml`) via
 `client.beta.agents.list()` + `environments.list()`. This means rebuilding
 the environment (e.g. for a new pip dep) requires zero secret updates —
 `scripts/create_agent.py` archives the old env and creates a new one with
-the same `name`, and the orchestrator picks it up on the next run.
+the same `name`, and the cron runner picks it up on the next run.
 
-`PASSTHROUGH_KEYS` in `orchestrator/daily.py` is the source of truth for the
+`PASSTHROUGH_KEYS` in `cron/daily.py` is the source of truth for the
 container set. Adding a new key requires (a) adding it to that tuple and
 (b) ensuring the corresponding `brf` subcommand reads it via `get_env(...)`
 from `brf/config.py`.
@@ -195,6 +195,6 @@ from `brf/config.py`.
   latency. Subsequent runs reuse the cached image.
 - **Bumping CLI** — to deploy a new `brf` version, push to `main`, then
   rerun `scripts/create_agent.py` to register a fresh environment
-  (immutable post-create). The orchestrator looks up the env by `name`
+  (immutable post-create). The cron runner looks up the env by `name`
   at runtime, so **you do NOT need to update any GitHub Secret** —
   next cron run automatically uses the new env.

@@ -34,5 +34,5 @@ config:
       #   2. `python -m build && twine upload dist/*`
       #   3. bump the pin below to the new version
       #   4. bump this env's `name:` (vN → vN+1) and re-run scripts/create_agent.py
-      #   5. orchestrator picks up the new env by name on next cron run
+      #   5. cron runner picks up the new env by name on next cron run
       - "blog-research-feed==0.2.4"

@@ -8,7 +8,7 @@ description: >
   / podcasts, fans out reader subagents in parallel to read long-form items,
   drafts a 3-section Top-10 / Research / Releases report, runs a reviewer
   subagent for QA, then posts via `brf report slack`. Secrets are mounted at
-  /workspace/.env by the cron orchestrator at session-create time.
+  /workspace/.env by the cron runner at session-create time.
 
 tools:
   # Built-in toolset: bash, read, write, edit, glob, grep, web_search, web_fetch.

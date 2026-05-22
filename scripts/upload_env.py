@@ -2,12 +2,12 @@
 
 Run this manually whenever the secrets change (e.g. you rotate a key).
 Persist the printed id as the ``ENV_FILE_ID`` GitHub Actions variable so
-the daily orchestrator can mount it directly instead of re-uploading on
+the daily cron runner can mount it directly instead of re-uploading on
 every run.
 
 Usage:
 
-    # Read keys from host environment (PASSTHROUGH_KEYS in orchestrator.daily):
+    # Read keys from host environment (PASSTHROUGH_KEYS in cron.daily):
     ANTHROPIC_API_KEY=... FIRECRAWL_API_KEY=... X_BEARER_TOKEN=... \\
     OPENAI_API_KEY=... SLACK_WEBHOOK_URL=... python -m scripts.upload_env
 
@@ -20,7 +20,7 @@ import argparse
 import os
 import sys
 
-from orchestrator.daily import (
+from cron.daily import (
     FILES_BETAS,
     PASSTHROUGH_KEYS,
     _build_env_payload,
