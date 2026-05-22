@@ -315,7 +315,7 @@ def run(dry_run: bool = False) -> int:
                     ],
                 )
                 LOG.info("kickoff sent")
-                _drain(stream)
+                _drain(stream, client=client, session_id=session.id)
         except _Timeout as exc:
             LOG.error("hard timeout: %s", exc)
             delete_after = False  # keep .env file for forensic debug
@@ -330,13 +330,51 @@ def run(dry_run: bool = False) -> int:
     return 0
 
 
-def _drain(stream: Any) -> None:
-    """Consume the SSE stream; break on terminal idle/terminated.
+# Subagents that the orchestrator auto-archives the moment they deliver
+# a result (`agent.thread_message_received`). The semantic is fire-and-
+# forget: coordinator dispatches → reader reads + returns → host frees
+# the thread slot. Coordinator must NOT `send_to_agent` to a reader for
+# follow-up; spawn a fresh one instead (see agent/system_prompt.md).
+#
+# Reviewer is INTENTIONALLY excluded — coordinator may dispatch a 2nd
+# review round on the same thread to re-validate revisions, so the
+# reviewer thread needs to stay live across the session.
+_AUTO_ARCHIVE_AGENTS: frozenset[str] = frozenset({
+    "blog-research-feed-reader",
+})
+
+
+def _archive_thread_safe(client: Any, session_id: str, thread_id: str, agent_name: str) -> None:
+    """Archive a thread, swallowing errors — never abort the run for cleanup."""
+    try:
+        client.beta.sessions.threads.archive(thread_id, session_id=session_id)
+        LOG.info("archived %s thread %s", agent_name, thread_id)
+    except Exception as exc:  # noqa: BLE001
+        LOG.warning(
+            "failed to archive %s thread %s: %s — slot stays occupied",
+            agent_name, thread_id, exc,
+        )
+
+
+def _drain(stream: Any, client: Any, session_id: str) -> None:
+    """Consume the SSE stream; auto-archive reader threads on completion.
 
     Sessions start in ``idle`` (per docs/managed_agents/sessions.md §417), so
     we must NOT break on the first idle — only after we've seen at least one
     ``status_running`` transition, which proves the agent actually started
     working on our kickoff.
+
+    Multiagent thread events (per docs/managed_agents/multi-agent.md §745):
+      session.thread_created           — new subagent thread spawned
+      session.thread_status_running    — subagent started working
+      session.thread_status_idle       — subagent finished a turn
+      agent.thread_message_received    — subagent delivered result to coord
+      agent.thread_message_sent        — coord sent follow-up to subagent
+
+    The 25-concurrent-thread cap (docs §348) is per-session. Without
+    archive, 25 reader threads stay idle and block the reviewer. We
+    archive on ``agent.thread_message_received`` so reader slots free
+    up the instant a reader returns.
     """
     has_seen_running = False
     for event in stream:
@@ -357,6 +395,42 @@ def _drain(stream: Any) -> None:
                 for b in (getattr(event, "content", []) or [])
             )
             LOG.debug("agent.thinking: %s", _truncate(text, 200))
+        # ---- multiagent thread events ----
+        elif etype == "session.thread_created":
+            agent_name = getattr(event, "agent_name", "?")
+            thread_id = getattr(event, "session_thread_id", "?")
+            LOG.info("thread_created agent=%s id=%s", agent_name, thread_id)
+        elif etype == "session.thread_status_running":
+            LOG.info(
+                "thread_running id=%s",
+                getattr(event, "session_thread_id", "?"),
+            )
+        elif etype == "session.thread_status_idle":
+            LOG.info(
+                "thread_idle id=%s stop_reason=%s",
+                getattr(event, "session_thread_id", "?"),
+                getattr(getattr(event, "stop_reason", None), "type", None),
+            )
+        elif etype == "session.thread_status_terminated":
+            LOG.warning(
+                "thread_terminated id=%s",
+                getattr(event, "session_thread_id", "?"),
+            )
+        elif etype == "agent.thread_message_sent":
+            LOG.info(
+                "thread_msg_sent to=%s thread=%s",
+                getattr(event, "to_agent_name", "?"),
+                getattr(event, "to_session_thread_id", "?"),
+            )
+        elif etype == "agent.thread_message_received":
+            from_agent = getattr(event, "from_agent_name", "?")
+            from_thread = getattr(event, "from_session_thread_id", None)
+            LOG.info("thread_msg_received from=%s thread=%s", from_agent, from_thread)
+            # Fire-and-forget for readers: free the slot immediately so
+            # the coordinator can spawn the reviewer (or more readers).
+            if from_thread and from_agent in _AUTO_ARCHIVE_AGENTS:
+                _archive_thread_safe(client, session_id, from_thread, from_agent)
+        # ---- session-level status ----
         elif etype == "session.status_running":
             has_seen_running = True
             LOG.info("status_running")

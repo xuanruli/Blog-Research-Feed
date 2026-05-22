@@ -3,13 +3,20 @@ model:
   id: claude-sonnet-4-6
 system: "@./agent/reader_prompt.md"
 description: >
-  Subagent. Reads one long-form item (blog / paper / video transcript /
-  podcast transcript) from /tmp/feed/full/<id>.* and returns a structured
-  short summary (verdict / category / why_useful / bullets / one_liner).
-  Spawned 20-30× in parallel by the curator coordinator.
+  Subagent. Reads 1-3 long-form items from /tmp/feed/full/<id>.* and
+  returns a structured short summary block per item (verdict / category
+  / why_useful / bullets / one_liner). Spawned in parallel by the
+  curator coordinator. The orchestrator auto-archives each reader thread
+  the moment it returns its result — readers are strictly fire-and-
+  forget; coordinator does NOT send_to_agent for follow-up.
+
+  Sonnet 4.6 (no extended thinking — default). The task is extract-and-
+  rephrase, doesn't need long reasoning; but Sonnet's quality ceiling
+  is high enough to catch subtle why-useful judgments that Haiku might
+  miss. Reviewer (Opus 4.7) is the final QA, not the only QA.
 
 tools:
   # bash is enough — reader cats the file. read/grep/web_search/web_fetch
-  # come along with the toolset, but reader prompt restricts use to local
-  # files only (no network calls — curator already drilled).
+  # come along with the toolset; reader prompt restricts use to local
+  # files only (no network — curator already drilled).
   - type: agent_toolset_20260401
