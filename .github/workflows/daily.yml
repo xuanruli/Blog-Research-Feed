@@ -22,7 +22,7 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install orchestrator deps
+      - name: Install cron runner deps
         # Runner only needs the Anthropic SDK + PyYAML to call sessions/files
         # API and resolve agent/env by name. brf is NOT needed on the runner —
         # it runs inside the Managed Agents container.
@@ -35,7 +35,7 @@ jobs:
           # whose id is stored as the ENV_FILE_ID repository variable.
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           ENV_FILE_ID: ${{ vars.ENV_FILE_ID }}
-        run: python -m orchestrator.daily
+        run: python -m cron.daily
 
       - name: Upload logs on failure
         if: failure()

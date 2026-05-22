@@ -8,14 +8,14 @@ Two invocation contexts:
 
 * Inside the agent's session container: ``brf fetch rss --since … | jq …``.
   The CLI auto-loads secrets from ``/workspace/.env`` (mounted by the
-  orchestrator at session-create time) via ``brf.config``.
+  cron runner at session-create time) via ``brf.config``.
 * Locally, for smoke-testing without going through the agent loop. Set the
   same env vars in your shell or a local ``.env``.
 
-The cron-side orchestrator that creates the Managed Agent session and
-manages the SSE event stream lives in the separate ``orchestrator``
-package (``python -m orchestrator.daily``). The two are intentionally
-decoupled — ``brf`` does not import from ``orchestrator`` and vice versa.
+The cron-side cron runner that creates the Managed Agent session and
+manages the SSE event stream lives in the separate ``cron``
+package (``python -m cron.daily``). The two are intentionally
+decoupled — ``brf`` does not import from ``cron`` and vice versa.
 """
 from __future__ import annotations
 

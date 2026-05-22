@@ -1,4 +1,4 @@
-"""Daily orchestrator entry point.
+"""Daily cron runner entry point.
 
 Per run:
 
@@ -16,8 +16,8 @@ Per run:
 
 Run via:
 
-    python -m orchestrator.daily            # real run
-    python -m orchestrator.daily --dry-run  # planning only, no API calls
+    python -m cron.daily            # real run
+    python -m cron.daily --dry-run  # planning only, no API calls
 
 The agent itself drives all the work via the pre-installed ``brf`` CLI in
 bash inside its session container.
@@ -36,7 +36,7 @@ import threading
 from pathlib import Path
 from typing import Any, Optional
 
-LOG = logging.getLogger("orchestrator.daily")
+LOG = logging.getLogger("cron.daily")
 
 HARD_TIMEOUT_SECONDS = 30 * 60
 
@@ -57,7 +57,7 @@ CONTAINER_ENV_PATH = "/workspace/.env"
 FILES_BETAS = ["managed-agents-2026-04-01", "files-api-2025-04-14"]
 
 # Path to the project root (where agent/*.yaml lives) — repo root.
-# orchestrator/daily.py → project root is parent of parent.
+# cron/daily.py → project root is parent of parent.
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 AGENT_YAML_PATH = _PROJECT_ROOT / "agent" / "agent.yaml"
 ENV_YAML_PATH = _PROJECT_ROOT / "agent" / "environment.yaml"
@@ -94,7 +94,7 @@ class _Timeout(RuntimeError):
 
 def _arm_timeout(seconds: int) -> None:
     def _handler(signum, frame):  # noqa: ARG001
-        raise _Timeout(f"orchestrator exceeded {seconds}s hard cap")
+        raise _Timeout(f"cron runner exceeded {seconds}s hard cap")
 
     if not hasattr(signal, "SIGALRM"):
         return  # Windows / non-POSIX
@@ -171,7 +171,7 @@ def _read_yaml_name(path: Path) -> str:
         data = yaml.safe_load(path.read_text(encoding="utf-8"))
     except FileNotFoundError as exc:
         raise RuntimeError(
-            f"Expected {path} (this orchestrator runs from the repo root)."
+            f"Expected {path} (this cron runner script runs from the repo root)."
         ) from exc
     name = (data or {}).get("name")
     if not name:
@@ -396,7 +396,7 @@ def _truncate(text: str, limit: int = 500) -> str:
 
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="python -m orchestrator.daily",
+        prog="python -m cron.daily",
         description=__doc__.split("\n\n")[0] if __doc__ else None,
     )
     parser.add_argument(
