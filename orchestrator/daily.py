@@ -2,15 +2,17 @@
 
 Per run:
 
-1. Build a ``.env`` payload from the host's environment (only the keys the
-   container needs), upload via Files API.
+1. Resolve the .env file to mount.
+   - Preferred: ``ENV_FILE_ID`` env var points at a pre-uploaded Files API
+     object (see ``scripts/upload_env.py``). Nothing is uploaded or deleted.
+   - Fallback: build a ``.env`` payload from host environment
+     (PASSTHROUGH_KEYS), upload via Files API for this run, best-effort
+     delete on clean exit. Kept for local dev / one-off runs.
 2. Create a session referencing the pre-created agent + environment that
-   mounts the uploaded .env at ``/workspace/.env``.
+   mounts the .env at ``/workspace/.env``.
 3. Stream events for logs/visibility; exit when the session goes idle with a
    terminal stop_reason (after seeing at least one running transition) or
    terminates.
-4. Best-effort delete the uploaded .env file on clean exit (kept on failure
-   for forensic debug).
 
 Run via:
 
@@ -226,8 +228,13 @@ def run(dry_run: bool = False) -> int:
 
     _get_env("ANTHROPIC_API_KEY", required=not dry_run)
 
-    env_payload = _build_env_payload()
-    LOG.info("env payload: %d bytes", len(env_payload))
+    preuploaded_file_id = os.environ.get("ENV_FILE_ID") or None
+    if preuploaded_file_id:
+        LOG.info("using pre-uploaded env file: %s", preuploaded_file_id)
+        env_payload = b""
+    else:
+        env_payload = _build_env_payload()
+        LOG.info("env payload: %d bytes (will upload per-run)", len(env_payload))
 
     if dry_run:
         # Read names but don't hit the API.
@@ -236,7 +243,14 @@ def run(dry_run: bool = False) -> int:
             "env_name": _read_yaml_name(ENV_YAML_PATH),
             "today": today,
             "yesterday": yesterday,
-            "env_keys": [k for k in PASSTHROUGH_KEYS if os.environ.get(k)],
+            "env_source": (
+                {"mode": "preuploaded", "file_id": preuploaded_file_id}
+                if preuploaded_file_id
+                else {
+                    "mode": "build_and_upload",
+                    "env_keys": [k for k in PASSTHROUGH_KEYS if os.environ.get(k)],
+                }
+            ),
             "mount_path": CONTAINER_ENV_PATH,
         }
         LOG.info("--dry-run plan: %s", json.dumps(plan, default=str))
@@ -248,11 +262,16 @@ def run(dry_run: bool = False) -> int:
     client = Anthropic()
     agent_id, env_id = _resolve_agent_and_env(client)
 
-    LOG.info("uploading env payload to Files API")
-    uploaded = _upload_env_file(client, env_payload)
-    LOG.info("uploaded file id=%s", uploaded.id)
+    if preuploaded_file_id:
+        file_id = preuploaded_file_id
+        delete_after = False
+    else:
+        LOG.info("uploading env payload to Files API")
+        uploaded = _upload_env_file(client, env_payload)
+        LOG.info("uploaded file id=%s", uploaded.id)
+        file_id = uploaded.id
+        delete_after = True
 
-    delete_after = True
     try:
         LOG.info("creating session agent=%s env=%s", agent_id, env_id)
         session = client.beta.sessions.create(
@@ -262,7 +281,7 @@ def run(dry_run: bool = False) -> int:
             resources=[
                 {
                     "type": "file",
-                    "file_id": uploaded.id,
+                    "file_id": file_id,
                     "mount_path": CONTAINER_ENV_PATH,
                 }
             ],
@@ -307,7 +326,7 @@ def run(dry_run: bool = False) -> int:
         raise
     finally:
         if delete_after:
-            _try_delete_file(client, uploaded.id)
+            _try_delete_file(client, file_id)
     return 0
 
 
