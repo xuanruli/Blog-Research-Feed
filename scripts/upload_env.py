@@ -2,7 +2,7 @@
 
 Run this manually whenever the secrets change (e.g. you rotate a key).
 Persist the printed id as the ``ENV_FILE_ID`` GitHub Actions variable so
-the daily cron runner script can mount it directly instead of re-uploading on
+the daily cron runner can mount it directly instead of re-uploading on
 every run.
 
 Usage:

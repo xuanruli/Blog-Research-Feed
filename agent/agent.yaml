@@ -3,13 +3,26 @@ model:
   id: claude-opus-4-7
 system: "@./agent/system_prompt.md"
 description: >
-  Daily AI-news curator. Uses the pre-installed `brf` CLI inside the container
-  to fetch RSS / X / podcasts / videos, composes a Slack-friendly report, and
-  posts it via `brf report slack`. Secrets are mounted at /workspace/.env by
-  the cron runner at session-create time.
+  Daily AI-engineering-signal curator (coordinator). Uses the pre-installed
+  `brf` CLI inside the container to fetch RSS / X / Firecrawl-index / YouTube
+  / podcasts, fans out reader subagents in parallel to read long-form items,
+  drafts a 3-section Top-10 / Research / Releases report, runs a reviewer
+  subagent for QA, then posts via `brf report slack`. Secrets are mounted at
+  /workspace/.env by the cron runner at session-create time.
 
 tools:
   # Built-in toolset: bash, read, write, edit, glob, grep, web_search, web_fetch.
   # Bash is the primary surface — the agent pipes brf subcommands together
   # rather than going through a custom-tool round-trip.
   - type: agent_toolset_20260401
+
+# Multiagent roster — coordinator delegates long-form reads to readers
+# (parallel fan-out, 20-30×/day) and report QA to the reviewer (1-2×/day).
+# Subagent IDs are resolved by scripts/create_agent.py at provision time:
+# the script first creates/updates reader + reviewer, then injects their
+# IDs here when creating/updating the coordinator.
+multiagent:
+  type: coordinator
+  agents:
+    - { type: agent, name: blog-research-feed-reader }
+    - { type: agent, name: blog-research-feed-reviewer }
