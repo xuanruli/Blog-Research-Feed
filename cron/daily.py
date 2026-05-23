@@ -372,11 +372,23 @@ def _drain(stream: Any, client: Any, session_id: str) -> None:
       agent.thread_message_sent        — coord sent follow-up to subagent
 
     The 25-concurrent-thread cap (docs §348) is per-session. Without
-    archive, 25 reader threads stay idle and block the reviewer. We
-    archive on ``agent.thread_message_received`` so reader slots free
-    up the instant a reader returns.
+    archive, reader threads pile up idle and block the reviewer. We
+    archive each reader thread when it goes idle.
+
+    Archive timing matters: a thread can only be archived from ``idle``
+    status (archiving a ``running`` thread is a 400). ``agent.thread_
+    message_received`` fires while the reader is still finalizing
+    (often still ``running``), so we DON'T archive there — we track
+    reader thread ids from ``session.thread_created`` and archive on
+    the matching ``session.thread_status_idle``, which is the first
+    moment the thread is provably archivable.
     """
     has_seen_running = False
+    # thread_id -> agent_name, populated from session.thread_created.
+    # Used to (a) know which idle threads are readers (archive them) vs
+    # the coordinator / reviewer (leave alone), and (b) avoid double
+    # archive attempts.
+    reader_threads: set[str] = set()
     for event in stream:
         etype = getattr(event, "type", None)
         if etype == "agent.message":
@@ -400,17 +412,30 @@ def _drain(stream: Any, client: Any, session_id: str) -> None:
             agent_name = getattr(event, "agent_name", "?")
             thread_id = getattr(event, "session_thread_id", "?")
             LOG.info("thread_created agent=%s id=%s", agent_name, thread_id)
+            if thread_id and agent_name in _AUTO_ARCHIVE_AGENTS:
+                reader_threads.add(thread_id)
         elif etype == "session.thread_status_running":
             LOG.info(
                 "thread_running id=%s",
                 getattr(event, "session_thread_id", "?"),
             )
         elif etype == "session.thread_status_idle":
+            thread_id = getattr(event, "session_thread_id", "?")
             LOG.info(
                 "thread_idle id=%s stop_reason=%s",
-                getattr(event, "session_thread_id", "?"),
+                thread_id,
                 getattr(getattr(event, "stop_reason", None), "type", None),
             )
+            # A reader is fire-and-forget: the first time it goes idle it
+            # has delivered its result and will get no follow-up, so free
+            # the slot. Only readers (tracked above) — never coordinator
+            # or reviewer. Discard from the set so a later idle (can't
+            # happen for an archived thread, but be defensive) is a no-op.
+            if thread_id in reader_threads:
+                reader_threads.discard(thread_id)
+                _archive_thread_safe(
+                    client, session_id, thread_id, "blog-research-feed-reader"
+                )
         elif etype == "session.thread_status_terminated":
             LOG.warning(
                 "thread_terminated id=%s",
@@ -426,10 +451,10 @@ def _drain(stream: Any, client: Any, session_id: str) -> None:
             from_agent = getattr(event, "from_agent_name", "?")
             from_thread = getattr(event, "from_session_thread_id", None)
             LOG.info("thread_msg_received from=%s thread=%s", from_agent, from_thread)
-            # Fire-and-forget for readers: free the slot immediately so
-            # the coordinator can spawn the reviewer (or more readers).
-            if from_thread and from_agent in _AUTO_ARCHIVE_AGENTS:
-                _archive_thread_safe(client, session_id, from_thread, from_agent)
+            # NOTE: do NOT archive here. The thread is often still
+            # ``running`` when its message lands (archive needs ``idle``,
+            # else 400). We archive on the matching
+            # ``session.thread_status_idle`` instead.
         # ---- session-level status ----
         elif etype == "session.status_running":
             has_seen_running = True

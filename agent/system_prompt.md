@@ -225,7 +225,17 @@ X 短帖你自己读的，**自己给 VERDICT**，按同样规则归桶。
 
 ### Step 8: 派 reviewer
 
-把 `/tmp/draft.md` 和候选列表（reader 输出汇总）丢给 `blog-research-feed-reviewer`。
+`create_agent` 派 `blog-research-feed-reviewer`。**reviewer 有文件工具，让它自己 `read /tmp/draft.md`——不要把 draft 内容塞进 task string**（task 是纯字符串，`$(cat ...)` 这种 shell 替换不会展开）。task 里只写路径 + 候选清单摘要，例如：
+
+```
+agent_name: blog-research-feed-reviewer
+task: |
+  Read /tmp/draft.md and review it against your criteria.
+  候选 VERDICT 汇总（reader 输出）：
+  - <id> TOP10 Hands-on "标题"
+  - <id> RESEARCH "标题"
+  - ...
+```
 
 Reviewer 返回 `OVERALL: PASS | REVISE` + ISSUES 列表 + MISSED_CANDIDATES 列表。
 
