@@ -49,6 +49,14 @@ rss:
   - { name: "Claude Code releases",      url: "https://github.com/anthropics/claude-code/releases.atom" }
   - { name: "Codex (OpenAI CLI) releases", url: "https://github.com/openai/codex/releases.atom" }
 
+  # --- Coding-agent / infra vendor blogs ---
+  - { name: "Amp (Sourcegraph)",         url: "https://ampcode.com/news.rss" }
+  - { name: "Sourcegraph Blog",          url: "https://sourcegraph.com/blog/rss.xml" }
+  # Vercel atom is the full changelog (very high volume, mostly product
+  # notes); summary_only keeps it title-triage so the curator can pick
+  # the AI SDK / v0 / agent posts and drop routine changelog noise.
+  - { name: "Vercel",                    url: "https://vercel.com/atom", summary_only: true }
+
   # --- OSS tool releases: Agent frameworks ---
   - { name: "LangChain blog",            url: "https://blog.langchain.com/rss/", enabled: false, reason: "RSS broken; covered by firecrawl_index" }
   - { name: "LangGraph releases",        url: "https://github.com/langchain-ai/langgraph/releases.atom" }
@@ -332,6 +340,18 @@ firecrawl_index:
     date_group: null
 
   # --- Tool / changelog blogs ---
+  - name: "Modal Blog"
+    url: "https://modal.com/blog"
+    # No RSS; ML-infra engineering posts (GPU, serverless, inference).
+    article_url_regex: 'https?://modal\.com/blog/[a-z0-9-]+'
+    date_format: null
+    date_group: null
+  - name: "Factory AI News"
+    url: "https://www.factory.ai/news"
+    # No RSS; coding-agent (Droid) product + engineering posts.
+    article_url_regex: 'https?://(?:www\.)?factory\.ai/news/[a-z0-9-]+'
+    date_format: null
+    date_group: null
   - name: "Conductor Changelog"
     url: "https://conductor.build/changelog"
     # TODO: refine after sample firecrawl markdown
