@@ -16,6 +16,15 @@ tools:
   # rather than going through a custom-tool round-trip.
   - type: agent_toolset_20260401
 
+# Custom skills (progressive disclosure — only load into context when the
+# coordinator hits the relevant task). Referenced by display_title; the
+# concrete skill_* id is resolved by scripts/create_agent.py at provision
+# time (run scripts/upload_skill.py first to publish skills/ to the
+# workspace). Source lives in skills/<title>/SKILL.md.
+skills:
+  - { type: custom, title: brf-cli }
+  - { type: custom, title: slack-formatting }
+
 # Multiagent roster — coordinator delegates long-form reads to readers
 # (parallel fan-out, 20-30×/day) and report QA to the reviewer (1-2×/day).
 # Subagent IDs are resolved by scripts/create_agent.py at provision time:
