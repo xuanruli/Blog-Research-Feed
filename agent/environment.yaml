@@ -1,4 +1,4 @@
-name: blog-research-feed-env-v9  # v9: brf 0.2.5 — added Amp/Sourcegraph/Vercel RSS + Modal/Factory firecrawl_index sources. v8: brf 0.2.4 (Phase 2-5 fetchers + firecrawl-py v4 fix). v5 was the last pre-0.2 env (brf 0.1.4); v6/v7 names were drafted but never created.
+name: blog-research-feed-env-v10  # v10: brf 0.2.6 — X fetcher resolves retweet/quote full text (referenced_tweets), keeps RT/QT (was excluding both); + yoheinakajima handle. v9: Amp/Sourcegraph/Vercel/Modal/Factory sources.
 config:
   type: cloud
 
@@ -35,4 +35,4 @@ config:
       #   3. bump the pin below to the new version
       #   4. bump this env's `name:` (vN → vN+1) and re-run scripts/create_agent.py
       #   5. cron runner picks up the new env by name on next cron run
-      - "blog-research-feed==0.2.5"
+      - "blog-research-feed==0.2.6"

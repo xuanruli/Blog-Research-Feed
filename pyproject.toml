@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "blog-research-feed"
-version = "0.2.5"
+version = "0.2.6"
 description = "AI-news aggregation: the `brf` tool CLI (agent-side) plus the `cron` package (host-side cron + Slack receiver)."
 readme = "README.md"
 requires-python = ">=3.10"
