@@ -153,6 +153,7 @@ x:
     - AmandaAskell
     - ManusAI           # Manus AI official
     - peakji            # Yichao "Peak" Ji — Manus co-founder
+    - yoheinakajima     # BabyAGI / ActiveGraph — agent architecture experiments
     # Multimodal / VLM / video-gen focus
     - DrJimFan          # NVIDIA — VLM + robotics
     - giffmana          # Lucas Beyer — VLM expert
