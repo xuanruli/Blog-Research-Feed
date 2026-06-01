@@ -15,7 +15,6 @@ from __future__ import annotations
 import json
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -111,7 +110,7 @@ class FeedAggregator:
         index_path = self.output_dir / "index.json"
         index_path.write_text(
             json.dumps(
-                [asdict(it) for it in deduped],
+                [it.to_dict() for it in deduped],
                 ensure_ascii=False,
                 indent=2,
             )

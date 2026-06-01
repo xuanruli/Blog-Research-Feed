@@ -11,7 +11,6 @@ import pytest
 from brf.feed_item import make_id
 from brf.fetchers.rss import RssFetcher
 
-
 # ---------------------------------------------------------------------------
 # Synthetic feed XML helpers
 # ---------------------------------------------------------------------------

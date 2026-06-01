@@ -27,20 +27,12 @@ from typing import Optional
 
 from brf.feed_item import FeedItem, make_id
 
+from ._markdown import MD_LINK_RE as _MD_LINK_RE
+from ._markdown import url_slug as _url_slug
 from .base import SourceFetcher
 
 MAX_ITEMS_PER_INDEX = 25
 SUMMARY_MAX_CHARS = 500
-
-# Markdown link extraction from the firecrawl-returned index page.
-_MD_LINK_RE = re.compile(r"\[([^\]\n]+)\]\((https?://[^)\s]+)\)")
-
-
-def _url_slug(url: str) -> str:
-    """Last non-empty path segment of ``url`` (no query, no trailing slash)."""
-    no_query = url.split("?", 1)[0].split("#", 1)[0]
-    parts = [p for p in no_query.rstrip("/").split("/") if p]
-    return parts[-1].lower() if parts else ""
 
 
 def _slug_to_title(url: str) -> str:

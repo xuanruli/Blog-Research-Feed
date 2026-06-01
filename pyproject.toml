@@ -18,7 +18,7 @@ dependencies = [
     "pyyaml",
     "youtube-transcript-api",
     "yt-dlp",
-    "requests",
+    "feedparser",
 ]
 
 [project.scripts]
@@ -29,3 +29,17 @@ include = ["brf*", "cron*"]
 
 [tool.setuptools.package-data]
 brf = ["sources.opml", "sources.yaml"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+# Correctness + import-hygiene. BLE (blind-except) is intentionally NOT
+# selected: this codebase deliberately swallows-and-logs per-source failures
+# so one bad fetcher can't sink a run (see the `# noqa: BLE001` sites).
+select = ["E", "F", "I", "B"]
+ignore = ["E501"]  # long lines are tolerated (URLs, docstrings, regexes)
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B"]  # fixtures/mocks take liberties pytest is fine with

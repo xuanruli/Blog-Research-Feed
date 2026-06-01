@@ -15,8 +15,7 @@ from typing import Optional
 import httpx
 
 from .config import get_env
-
-_MAX_BYTES = 25 * 1024 * 1024  # Whisper API limit
+from .transcription import WHISPER_MAX_BYTES as _MAX_BYTES
 
 
 def _pick_enclosure_url(entry) -> Optional[str]:
@@ -69,27 +68,12 @@ def _download_audio(url: str, dest_path: str) -> tuple[bool, Optional[str], Opti
 
 def _transcribe_whisper(path: str, api_key: str) -> tuple[Optional[str], Optional[str], Optional[str]]:
     """Upload `path` to OpenAI Whisper. Returns (text, status, error_message)."""
-    try:
-        with open(path, "rb") as f:
-            files = {"file": (os.path.basename(path) or "audio.mp3", f, "application/octet-stream")}
-            data = {"model": "whisper-1"}
-            headers = {"Authorization": f"Bearer {api_key}"}
-            r = httpx.post(
-                "https://api.openai.com/v1/audio/transcriptions",
-                headers=headers,
-                files=files,
-                data=data,
-                timeout=600.0,
-            )
-        if r.status_code != 200:
-            return None, "transcription_failed", f"http {r.status_code}: {r.text[:500]}"
-        payload = r.json()
-        text = payload.get("text")
-        if not text:
-            return None, "transcription_failed", f"no text in response: {payload}"
-        return text, "ok", None
-    except Exception as e:
-        return None, "transcription_failed", str(e)
+    from .transcription import transcribe
+
+    text, err = transcribe(path, api_key)
+    if text is None:
+        return None, "transcription_failed", err
+    return text, "ok", None
 
 
 def get_transcript(rss_url: str, episode_index: int = 0) -> dict:

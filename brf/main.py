@@ -63,8 +63,8 @@ def fetch_rss(since, opml):
               help="Only include posts on/after this date (YYYY-MM-DD).")
 def fetch_x_user(handle, since):
     """Fetch recent posts from an X user. Outputs JSON."""
-    from .x_client import fetch_user_recent
     from .io import emit_json
+    from .x_client import fetch_user_recent
 
     result = fetch_user_recent(handle, since=since)
     emit_json(result)
@@ -110,7 +110,7 @@ def firecrawl_scrape(url):
     try:
         result = scrape(url)
     except RuntimeError as e:
-        raise click.ClickException(str(e))
+        raise click.ClickException(str(e)) from e
     emit_json(result)
 
 
@@ -126,7 +126,7 @@ def firecrawl_search(query, limit):
     try:
         results = search(query, limit=limit)
     except RuntimeError as e:
-        raise click.ClickException(str(e))
+        raise click.ClickException(str(e)) from e
     emit_json(results)
 
 
@@ -153,7 +153,7 @@ def report_slack(webhook_env, message_file):
     try:
         text = Path(message_file).read_text(encoding="utf-8")
     except OSError as e:
-        raise click.ClickException(f"could not read --message-file: {e}")
+        raise click.ClickException(f"could not read --message-file: {e}") from e
 
     blocks = markdown_to_blocks(text)
     result = post_blocks(blocks, webhook_env=webhook_env)

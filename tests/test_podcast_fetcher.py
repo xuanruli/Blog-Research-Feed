@@ -5,12 +5,10 @@ from datetime import datetime, timezone
 from unittest.mock import patch
 
 import httpx
-import pytest
 
 from brf.feed_item import make_id
 from brf.fetchers.base import SourceFetcher
 from brf.fetchers.podcast import PodcastFetcher, _parse_duration
-
 
 # ---------------------------------------------------------------------------
 # Synthetic feed XML helpers

@@ -22,8 +22,6 @@ import httpx
 
 from .config import get_env
 
-_WHISPER_MAX_BYTES = 25 * 1024 * 1024  # OpenAI Whisper API hard limit
-
 # Heuristic ceiling on duration we'll bother downloading. bestaudio is
 # typically m4a/webm in the 50–80 kbps range; ~70 min × 80 kbps ≈ 40 MB
 # already exceeds the 25 MB Whisper cap. Use 70 min as the pre-download
@@ -125,8 +123,8 @@ def _fetch_transcript(video_id: str) -> tuple[Optional[str], Optional[str], Opti
     try:
         from youtube_transcript_api import YouTubeTranscriptApi  # type: ignore
         from youtube_transcript_api._errors import (  # type: ignore
-            TranscriptsDisabled,
             NoTranscriptFound,
+            TranscriptsDisabled,
             VideoUnavailable,
         )
     except Exception as e:
@@ -210,32 +208,9 @@ def _download_audio_ytdlp(url: str, dest_dir: str) -> tuple[Optional[str], Optio
 
 def _transcribe_whisper(path: str, api_key: str) -> tuple[Optional[str], Optional[str]]:
     """POST ``path`` to OpenAI Whisper. Returns (text, error_message)."""
-    try:
-        size = os.path.getsize(path)
-    except OSError as e:
-        return None, f"stat failed: {e}"
-    if size > _WHISPER_MAX_BYTES:
-        return None, f"audio {size} bytes exceeds Whisper {_WHISPER_MAX_BYTES} limit"
-    try:
-        with open(path, "rb") as f:
-            files = {"file": (os.path.basename(path) or "audio.m4a", f, "application/octet-stream")}
-            data = {"model": "whisper-1"}
-            headers = {"Authorization": f"Bearer {api_key}"}
-            r = httpx.post(
-                "https://api.openai.com/v1/audio/transcriptions",
-                headers=headers,
-                files=files,
-                data=data,
-                timeout=600.0,
-            )
-        if r.status_code != 200:
-            return None, f"whisper http {r.status_code}: {r.text[:500]}"
-        text = r.json().get("text")
-        if not text:
-            return None, "whisper returned no text"
-        return text, None
-    except Exception as e:
-        return None, str(e)
+    from .transcription import transcribe
+
+    return transcribe(path, api_key)
 
 
 def _whisper_fallback(
