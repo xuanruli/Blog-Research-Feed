@@ -12,32 +12,32 @@ RssFetcher"). Responsible for:
 * Firecrawl-fallback lane for the handful of feeds whose RSS is broken
   but whose HTML index is reachable (jiqizhixin, HF papers, LangChain).
 * ``fetch_full`` drill-down: firecrawl-scrape the item URL on demand.
+
+The pooled fetch/parse/since-filter scaffolding lives in
+:class:`brf.fetchers.feed_fetcher.FeedFetcher`; this module adds the
+3-branch normalize, the pre-fetched-body write, and the firecrawl-fallback
+lane on top.
 """
 from __future__ import annotations
 
 import re
 import sys
-from collections.abc import Iterable
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-import httpx
-
 from brf.feed_item import FeedItem, _strip_html, _truncate, make_id
 
-from .base import SourceFetcher
-from ._rss_parsing import parse_feed
+from ._markdown import MD_LINK_RE as _MD_LINK_RE
+from ._markdown import url_slug as _url_slug
+from .feed_fetcher import (
+    SUMMARY_MAX_CHARS,
+    SUMMARY_MIN_CHARS,
+    FeedFetcher,
+    as_aware,
+)
 
-DEFAULT_TIMEOUT_SECS = 15
-MAX_WORKERS = 10
-SUMMARY_MIN_CHARS = 80  # threshold for "summary is substantive" branch
-SUMMARY_MAX_CHARS = 500
 FALLBACK_MAX_ITEMS_PER_FEED = 10
-
-# Markdown link extraction for firecrawl-fallback feeds.
-_MD_LINK_RE = re.compile(r"\[([^\]\n]+)\]\((https?://[^)\s]+)\)")
 
 # ---------------------------------------------------------------------------
 # Firecrawl fallback config (ported from legacy brf/rss.py).
@@ -93,13 +93,6 @@ def _norm(u: str) -> str:
     return u.rstrip("/").lower()
 
 
-def _url_slug(url: str) -> str:
-    """Last non-empty path segment of ``url`` (no query, no trailing slash)."""
-    no_query = url.split("?", 1)[0].split("#", 1)[0]
-    parts = [p for p in no_query.rstrip("/").split("/") if p]
-    return parts[-1].lower() if parts else ""
-
-
 def _parse_fallback_date(raw: str, fmt: str) -> Optional[datetime]:
     try:
         return datetime.strptime(raw, fmt).replace(tzinfo=timezone.utc)
@@ -107,10 +100,12 @@ def _parse_fallback_date(raw: str, fmt: str) -> Optional[datetime]:
         return None
 
 
-class RssFetcher(SourceFetcher):
+class RssFetcher(FeedFetcher):
     """Fetcher for RSS/Atom feeds. See module docstring + design §3.4."""
 
     source_type = "rss"
+    log_prefix = "[rss]"
+    max_workers = 10
 
     def __init__(
         self,
@@ -158,89 +153,13 @@ class RssFetcher(SourceFetcher):
             else:
                 self._live_feeds.append(f)
 
-    # -- bulk fetch ----------------------------------------------------------
+    # -- FeedFetcher hooks (live lane) --------------------------------------
 
-    def fetch(self, since: datetime) -> Iterable[FeedItem]:
-        """Concurrent fetch across all enabled feeds. See class docstring."""
-        all_items: list[FeedItem] = []
-        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
-            futures = {
-                pool.submit(self._fetch_one, feed_meta, since): feed_meta
-                for feed_meta in self._live_feeds
-            }
-            for fut in as_completed(futures):
-                feed_meta = futures[fut]
-                try:
-                    all_items.extend(fut.result())
-                except Exception as exc:
-                    print(
-                        f"[rss] worker crashed for {feed_meta['url']}: {exc}",
-                        file=sys.stderr,
-                    )
+    def _feed_units(self) -> list[tuple[str, dict]]:
+        return [(f["url"], f) for f in self._live_feeds]
 
-        # Firecrawl fallbacks: sequential (firecrawl-py thread safety not
-        # guaranteed, and only ~3 entries here).
-        for feed_meta, cfg in self._fallback_feeds:
-            try:
-                all_items.extend(
-                    self._fetch_firecrawl_fallback(feed_meta, cfg, since)
-                )
-            except Exception as exc:
-                print(
-                    f"[rss] fallback crashed for {feed_meta['url']}: {exc}",
-                    file=sys.stderr,
-                )
-
-        return all_items
-
-    def _fetch_one(
-        self, feed_meta: dict, since: Optional[datetime]
-    ) -> list[FeedItem]:
-        """Fetch one feed via httpx, normalize entries to FeedItem."""
-        url = feed_meta["url"]
-        items: list[FeedItem] = []
-        try:
-            r = httpx.get(
-                url,
-                timeout=DEFAULT_TIMEOUT_SECS,
-                follow_redirects=True,
-                headers={"User-Agent": "Mozilla/5.0 BlogResearchFeed/1.0"},
-            )
-            r.raise_for_status()
-            parsed = parse_feed(r.content)
-        except Exception as exc:
-            print(f"[rss] FAILED {url}: {exc}", file=sys.stderr)
-            return items
-
-        source_title = feed_meta.get("name") or parsed.get("title") or url
-
-        for entry in parsed["entries"]:
-            published_iso = entry["published_iso"] or None
-
-            if since is not None and published_iso:
-                try:
-                    pub_dt = datetime.fromisoformat(published_iso)
-                    since_cmp = since
-                    if since_cmp.tzinfo is None:
-                        since_cmp = since_cmp.replace(tzinfo=timezone.utc)
-                    if pub_dt < since_cmp:
-                        continue
-                except ValueError:
-                    pass
-
-            item = self._normalize_entry(entry, feed_meta, source_title)
-            if item is not None:
-                items.append(item)
-
-        return items
-
-    # -- 3-branch normalize --------------------------------------------------
-
-    def _normalize_entry(
-        self,
-        entry: dict,
-        feed_meta: dict,
-        source_title: str,
+    def _normalize(
+        self, entry: dict, meta: dict, source_title: str
     ) -> Optional[FeedItem]:
         """Apply FULL / SUMMARY / TITLE-ONLY branching (design §3.4)."""
         entry_url = entry.get("link") or ""
@@ -249,7 +168,7 @@ class RssFetcher(SourceFetcher):
 
         content_encoded = entry.get("full_text") or ""
         description = entry.get("summary") or ""
-        summary_only_flag = bool(feed_meta.get("summary_only", False))
+        summary_only_flag = bool(meta.get("summary_only", False))
         item_id = make_id("rss", entry_url)
 
         if content_encoded:
@@ -282,7 +201,7 @@ class RssFetcher(SourceFetcher):
             summary=summary,
             has_full=has_full,
             needs_firecrawl=needs_firecrawl,
-            extra={"source_url": feed_meta.get("html_url", "")},
+            extra={"source_url": meta.get("html_url", "")},
         )
 
     def _save_full(self, item_id: str, content: str) -> None:
@@ -293,13 +212,34 @@ class RssFetcher(SourceFetcher):
         except OSError as exc:
             print(f"[rss] failed to write {path}: {exc}", file=sys.stderr)
 
+    # -- bulk fetch: live lane (base) + firecrawl-fallback lane -------------
+
+    def fetch(self, since: datetime):
+        """Run the live lane (pooled) then the sequential firecrawl lane."""
+        items = list(super().fetch(since))
+
+        # Firecrawl fallbacks: sequential (firecrawl-py thread safety not
+        # guaranteed, and only ~3 entries here).
+        since_cmp = as_aware(since)
+        for feed_meta, cfg in self._fallback_feeds:
+            try:
+                items.extend(
+                    self._fetch_firecrawl_fallback(feed_meta, cfg, since_cmp)
+                )
+            except Exception as exc:
+                print(
+                    f"[rss] fallback crashed for {feed_meta['url']}: {exc}",
+                    file=sys.stderr,
+                )
+        return items
+
     # -- firecrawl fallback (TODO Phase 4: move to FirecrawlIndexFetcher) ---
 
     def _fetch_firecrawl_fallback(
         self,
         feed_meta: dict,
         cfg: dict,
-        since: Optional[datetime],
+        since_cmp: Optional[datetime],
     ) -> list[FeedItem]:
         """Scrape ``cfg['html_url']`` via Firecrawl and emit article items.
 
@@ -330,10 +270,6 @@ class RssFetcher(SourceFetcher):
         date_group: Optional[int] = cfg.get("date_group")
         source_title: str = cfg.get("source_title") or feed_meta.get("name") or html_url
         slug_blocklist: frozenset[str] = cfg.get("slug_blocklist") or frozenset()
-
-        since_cmp = since
-        if since_cmp is not None and since_cmp.tzinfo is None:
-            since_cmp = since_cmp.replace(tzinfo=timezone.utc)
 
         items: list[FeedItem] = []
         seen_urls: set[str] = set()

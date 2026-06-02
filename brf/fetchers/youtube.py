@@ -10,25 +10,19 @@ See BRF_FETCHER_DESIGN.md §3.4. Responsible for:
 * ``fetch_full`` drill-down: ``brf.youtube.get_transcript`` (which
   internally does the youtube-transcript-api -> yt-dlp + Whisper
   two-leg fallback).
+
+The bulk fetch/parse/since-filter scaffolding lives in
+:class:`brf.fetchers.feed_fetcher.FeedFetcher`.
 """
 from __future__ import annotations
 
 import sys
-from collections.abc import Iterable
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
 from typing import Optional
-
-import httpx
 
 from brf.feed_item import FeedItem, _strip_html, _truncate, make_id
 
-from ._rss_parsing import parse_feed
-from .base import SourceFetcher
+from .feed_fetcher import SUMMARY_MAX_CHARS, SUMMARY_MIN_CHARS, FeedFetcher
 
-DEFAULT_TIMEOUT_SECS = 15
-SUMMARY_MIN_CHARS = 80
-SUMMARY_MAX_CHARS = 500
 CHANNEL_FEED_URL = (
     "https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
 )
@@ -60,7 +54,7 @@ def _ytdlp_metadata(url: str) -> Optional[dict]:
         return None
 
 
-class YouTubeFetcher(SourceFetcher):
+class YouTubeFetcher(FeedFetcher):
     """Fetcher for YouTube channels via their Atom channel feeds.
 
     Concurrency: ``ThreadPoolExecutor(max_workers=10)`` — one worker per
@@ -69,6 +63,7 @@ class YouTubeFetcher(SourceFetcher):
     """
 
     source_type = "youtube"
+    log_prefix = "[youtube]"
 
     def __init__(self, channels: list[dict], max_workers: int = 10):
         """Initialize.
@@ -80,89 +75,40 @@ class YouTubeFetcher(SourceFetcher):
         self.channels = list(channels)
         self.max_workers = max_workers
 
-    # -- bulk fetch ----------------------------------------------------------
+    # -- FeedFetcher hooks ---------------------------------------------------
 
-    def fetch(self, since: datetime) -> Iterable[FeedItem]:
-        """Concurrent fetch across all configured channels."""
-        all_items: list[FeedItem] = []
-        if not self.channels:
-            return all_items
+    def _feed_units(self) -> list[tuple[str, dict]]:
+        return [
+            (CHANNEL_FEED_URL.format(channel_id=ch["channel_id"]), ch)
+            for ch in self.channels
+        ]
 
-        with ThreadPoolExecutor(max_workers=self.max_workers) as pool:
-            futures = {
-                pool.submit(self._fetch_one, ch, since): ch
-                for ch in self.channels
-            }
-            for fut in as_completed(futures):
-                ch = futures[fut]
-                try:
-                    all_items.extend(fut.result())
-                except Exception as exc:
-                    print(
-                        f"[youtube] worker crashed for {ch.get('channel_id')}: {exc}",
-                        file=sys.stderr,
-                    )
-        return all_items
+    def _source_title(self, meta: dict, parsed: dict, url: str) -> str:
+        return meta.get("name") or parsed.get("title") or meta.get("channel_id") or url
 
-    def _fetch_one(
-        self, channel: dict, since: Optional[datetime]
-    ) -> list[FeedItem]:
-        """Fetch one channel's Atom feed, normalize entries to FeedItem."""
-        channel_id = channel["channel_id"]
-        url = CHANNEL_FEED_URL.format(channel_id=channel_id)
-        items: list[FeedItem] = []
+    def _normalize(
+        self, entry: dict, meta: dict, source_title: str
+    ) -> Optional[FeedItem]:
+        entry_url = entry.get("link") or ""
+        if not entry_url:
+            return None
 
-        try:
-            r = httpx.get(
-                url,
-                timeout=DEFAULT_TIMEOUT_SECS,
-                follow_redirects=True,
-                headers={"User-Agent": "Mozilla/5.0 BlogResearchFeed/1.0"},
-            )
-            r.raise_for_status()
-            parsed = parse_feed(r.content)
-        except Exception as exc:
-            print(f"[youtube] FAILED {url}: {exc}", file=sys.stderr)
-            return items
-
-        source_name = channel.get("name") or parsed.get("title") or channel_id
-
-        since_cmp = since
-        if since_cmp is not None and since_cmp.tzinfo is None:
-            since_cmp = since_cmp.replace(tzinfo=timezone.utc)
-
-        for entry in parsed["entries"]:
-            entry_url = entry.get("link") or ""
-            if not entry_url:
-                continue
-
-            published_iso = entry.get("published_iso") or None
-            if since_cmp is not None and published_iso:
-                try:
-                    pub_dt = datetime.fromisoformat(published_iso)
-                    if pub_dt < since_cmp:
-                        continue
-                except ValueError:
-                    pass
-
-            summary, duration_seconds = self._normalize_summary(entry)
-
-            items.append(FeedItem(
-                id=make_id("youtube", entry_url),
-                source_type="youtube",
-                source=source_name,
-                title=entry.get("title") or "",
-                url=entry_url,
-                published=published_iso,
-                summary=summary,
-                has_full=False,
-                needs_firecrawl=False,
-                extra={
-                    "channel_id": channel_id,
-                    "duration_seconds": duration_seconds,
-                },
-            ))
-        return items
+        summary, duration_seconds = self._normalize_summary(entry)
+        return FeedItem(
+            id=make_id("youtube", entry_url),
+            source_type="youtube",
+            source=source_title,
+            title=entry.get("title") or "",
+            url=entry_url,
+            published=entry.get("published_iso") or None,
+            summary=summary,
+            has_full=False,
+            needs_firecrawl=False,
+            extra={
+                "channel_id": meta["channel_id"],
+                "duration_seconds": duration_seconds,
+            },
+        )
 
     # -- normalize: empty-description fallback (design §3.4 (a)) -------------
 

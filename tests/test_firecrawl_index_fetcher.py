@@ -2,9 +2,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from unittest.mock import patch
-
-import pytest
 
 from brf.fetchers.base import SourceFetcher
 from brf.fetchers.firecrawl_index import (
@@ -13,7 +10,6 @@ from brf.fetchers.firecrawl_index import (
     _slug_to_title,
     _url_slug,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -162,7 +158,9 @@ ANTHROPIC_MD = """
 
 
 def test_fetch_happy_path_extracts_articles(monkeypatch):
-    fake_scrape = lambda url: {"markdown": ANTHROPIC_MD, "metadata": {}}
+    def fake_scrape(url):
+        return {"markdown": ANTHROPIC_MD, "metadata": {}}
+
     monkeypatch.setattr(
         "brf.firecrawl_client.scrape", fake_scrape, raising=False
     )

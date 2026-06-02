@@ -10,7 +10,6 @@ from brf.feed_item import make_id
 from brf.fetchers.base import SourceFetcher
 from brf.fetchers.youtube import YouTubeFetcher
 
-
 # ---------------------------------------------------------------------------
 # Synthetic Atom feed helpers (YouTube channel RSS is Atom 1.0)
 # ---------------------------------------------------------------------------

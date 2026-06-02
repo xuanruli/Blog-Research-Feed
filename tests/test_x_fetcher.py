@@ -8,10 +8,9 @@ from datetime import datetime, timezone
 
 import pytest
 
+from brf.feed_item import make_id
 from brf.fetchers.base import SourceFetcher
 from brf.fetchers.x import XFetcher
-from brf.feed_item import make_id
-
 
 SINCE = datetime(2026, 5, 19, tzinfo=timezone.utc)
 
