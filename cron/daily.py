@@ -56,6 +56,25 @@ CONTAINER_ENV_PATH = "/workspace/.env"
 # context (per docs/managed_agents/files.md).
 FILES_BETAS = ["managed-agents-2026-04-01", "files-api-2025-04-14"]
 
+# Persistent cross-session memory store. Resolved by NAME at runtime — same
+# philosophy as the agent/env resolution below — so a rotated store ID never
+# has to be stored as a secret. Override the name via the MEMORY_STORE_NAME
+# env var. If the store can't be resolved we log a warning and run WITHOUT
+# memory (degraded) rather than failing the whole daily pipeline over it.
+MEMORY_STORE_NAME = os.environ.get("MEMORY_STORE_NAME", "Resource_Insight")
+# Session-scoped guidance for the store, injected alongside its name/description
+# into the agent's system prompt (see docs/managed_agents/memory.md). Keep < 4096
+# chars. The mount itself lives at /mnt/memory/<store-name>/ inside the container.
+MEMORY_STORE_INSTRUCTIONS = (
+    "Persistent source-quality memory. Each entry records whether a given "
+    "source (RSS feed, author, X handle, podcast, YouTube channel) tends to "
+    "produce high-signal items or low-value noise. READ this before triaging "
+    "today's /tmp/feed/index.json so you can prioritize known-good sources and "
+    "deprioritize known-trash ones. After delivering the Slack report, UPDATE "
+    "it with what today's run revealed about source quality (new good/trash "
+    "sources, or corrections to prior judgments)."
+)
+
 # Path to the project root (where agent/*.yaml lives) — repo root.
 # cron/daily.py → project root is parent of parent.
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -218,6 +237,28 @@ def _resolve_agent_and_env(client: Any) -> tuple[str, str]:
     return agent.id, env.id
 
 
+def _resolve_memory_store_id(client: Any) -> Optional[str]:
+    """Look up the persistent memory store by name.
+
+    Returns its id, or ``None`` if it can't be uniquely resolved (zero or
+    multiple active matches). A missing store is non-fatal: the agent can
+    still produce a report, it just won't carry source-quality notes across
+    runs. We log loudly so the gap is visible without aborting the pipeline.
+    """
+    try:
+        match = _find_active_by_name(
+            client.beta.memory_stores.list(), MEMORY_STORE_NAME
+        )
+    except RuntimeError as exc:
+        LOG.warning(
+            "memory store %r unavailable (%s) — running WITHOUT memory",
+            MEMORY_STORE_NAME, exc,
+        )
+        return None
+    LOG.info("resolved memory_store.id=%s name=%r", match.id, MEMORY_STORE_NAME)
+    return match.id
+
+
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
@@ -252,6 +293,11 @@ def run(dry_run: bool = False) -> int:
                 }
             ),
             "mount_path": CONTAINER_ENV_PATH,
+            "memory_store": {
+                "name": MEMORY_STORE_NAME,
+                "access": "read_write",
+                "note": "resolved by name at session-create; warn+skip if absent",
+            },
         }
         LOG.info("--dry-run plan: %s", json.dumps(plan, default=str))
         print(json.dumps(plan, indent=2, default=str))
@@ -273,18 +319,35 @@ def run(dry_run: bool = False) -> int:
         delete_after = True
 
     try:
+        # Resources mounted into the session container at startup:
+        #   - the .env file (secrets)
+        #   - the persistent memory store (source-quality notes), if resolvable.
+        # Memory stores attach at session-CREATE time only (not via
+        # resources.add) — see docs/managed_agents/memory.md.
+        resources: list[dict[str, Any]] = [
+            {
+                "type": "file",
+                "file_id": file_id,
+                "mount_path": CONTAINER_ENV_PATH,
+            }
+        ]
+        memory_store_id = _resolve_memory_store_id(client)
+        if memory_store_id:
+            resources.append(
+                {
+                    "type": "memory_store",
+                    "memory_store_id": memory_store_id,
+                    "access": "read_write",
+                    "instructions": MEMORY_STORE_INSTRUCTIONS,
+                }
+            )
+
         LOG.info("creating session agent=%s env=%s", agent_id, env_id)
         session = client.beta.sessions.create(
             agent=agent_id,
             environment_id=env_id,
             title=f"Daily aggregation {today}",
-            resources=[
-                {
-                    "type": "file",
-                    "file_id": file_id,
-                    "mount_path": CONTAINER_ENV_PATH,
-                }
-            ],
+            resources=resources,
         )
         LOG.info(
             "session id=%s status=%s",
