@@ -18,6 +18,7 @@ Concurrency: sequential by default (one firecrawl call at a time).
 firecrawl-py thread safety isn't guaranteed and the index list is
 small (~30 entries × 1 scrape/entry/day).
 """
+
 from __future__ import annotations
 
 import re
@@ -56,6 +57,7 @@ def _parse_index_date(raw: str, fmt: str) -> Optional[datetime]:
         # time in May 2026 should pass a `since=2026-05-17` filter,
         # not be excluded for being "before" the cutoff.
         import calendar
+
         s = raw.split(".", 1)[0]
         if len(s) != 4 or not s.isdigit():
             return None
@@ -133,14 +135,16 @@ class FirecrawlIndexFetcher(SourceFetcher):
                     file=sys.stderr,
                 )
                 continue
-            self._entries.append({
-                "name": e.get("name") or e["url"],
-                "url": e["url"],
-                "pattern": compiled,
-                "date_format": e.get("date_format"),
-                "date_group": e.get("date_group"),
-                "slug_blocklist": frozenset(e.get("slug_blocklist") or ()),
-            })
+            self._entries.append(
+                {
+                    "name": e.get("name") or e["url"],
+                    "url": e["url"],
+                    "pattern": compiled,
+                    "date_format": e.get("date_format"),
+                    "date_group": e.get("date_group"),
+                    "slug_blocklist": frozenset(e.get("slug_blocklist") or ()),
+                }
+            )
 
     # -- bulk fetch ----------------------------------------------------------
 
@@ -228,18 +232,20 @@ class FirecrawlIndexFetcher(SourceFetcher):
             if not title or title.startswith("http"):
                 title = _slug_to_title(url)
 
-            items.append(FeedItem(
-                id=make_id("firecrawl_index", url),
-                source_type="firecrawl_index",
-                source=source_title,
-                title=title[:SUMMARY_MAX_CHARS],
-                url=url,
-                published=published_iso,
-                summary="",
-                has_full=False,
-                needs_firecrawl=True,
-                extra={"index_url": index_url},
-            ))
+            items.append(
+                FeedItem(
+                    id=make_id("firecrawl_index", url),
+                    source_type="firecrawl_index",
+                    source=source_title,
+                    title=title[:SUMMARY_MAX_CHARS],
+                    url=url,
+                    published=published_iso,
+                    summary="",
+                    has_full=False,
+                    needs_firecrawl=True,
+                    extra={"index_url": index_url},
+                )
+            )
             if len(items) >= MAX_ITEMS_PER_INDEX:
                 break
 
@@ -252,9 +258,13 @@ class FirecrawlIndexFetcher(SourceFetcher):
             return []
         articles = resp.get("articles") or []
         if articles:
-            return [(a.get("title") or "", a.get("url") or "", a.get("published")) for a in articles]
+            return [
+                (a.get("title") or "", a.get("url") or "", a.get("published")) for a in articles
+            ]
         markdown = resp.get("markdown") or ""
-        return [(m.group(1).strip(), m.group(2).strip(), None) for m in _MD_LINK_RE.finditer(markdown)]
+        return [
+            (m.group(1).strip(), m.group(2).strip(), None) for m in _MD_LINK_RE.finditer(markdown)
+        ]
 
     @staticmethod
     def _url_date(

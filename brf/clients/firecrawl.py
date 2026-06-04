@@ -4,6 +4,7 @@ Thin wrapper around the official `firecrawl-py` SDK that normalizes response
 shapes (pydantic models in newer SDKs, plain dicts in older ones) into the
 JSON-friendly dicts the CLI emits to stdout.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -122,11 +123,13 @@ def scrape_index(url: str) -> dict:
         u = _get(a, "url")
         if not u:
             continue
-        out_articles.append({
-            "title": (_get(a, "title") or "").strip(),
-            "url": str(u).strip(),
-            "published": _get(a, "published_date") or _get(a, "published"),
-        })
+        out_articles.append(
+            {
+                "title": (_get(a, "title") or "").strip(),
+                "url": str(u).strip(),
+                "published": _get(a, "published_date") or _get(a, "published"),
+            }
+        )
     return {"articles": out_articles, "markdown": markdown}
 
 
@@ -167,7 +170,10 @@ def _main(argv: list[str]) -> None:
     import sys
 
     if len(argv) < 2:
-        print("usage: python -m brf.clients.firecrawl {scrape URL | search QUERY [LIMIT]}", file=sys.stderr)
+        print(
+            "usage: python -m brf.clients.firecrawl {scrape URL | search QUERY [LIMIT]}",
+            file=sys.stderr,
+        )
         sys.exit(2)
     cmd = argv[1]
     if cmd == "scrape":
@@ -188,4 +194,5 @@ def _main(argv: list[str]) -> None:
 
 if __name__ == "__main__":  # pragma: no cover
     import sys
+
     _main(sys.argv)

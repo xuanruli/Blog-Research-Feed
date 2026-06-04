@@ -1,4 +1,5 @@
 """Markdown link + slug helpers shared by the firecrawl-backed fetchers."""
+
 from __future__ import annotations
 
 import re

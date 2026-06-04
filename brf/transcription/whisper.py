@@ -1,4 +1,5 @@
 """Shared OpenAI Whisper transcription: endpoint, 25 MB cap, and the upload POST."""
+
 from __future__ import annotations
 
 import os

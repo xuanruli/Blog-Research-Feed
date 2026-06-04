@@ -1,4 +1,5 @@
 """Tests for brf.fetchers.firecrawl_index.FirecrawlIndexFetcher."""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -18,6 +19,7 @@ SINCE = datetime(2026, 1, 1, tzinfo=timezone.utc)
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _entry(**overrides) -> dict:
     base = {
@@ -48,6 +50,7 @@ def _patch_index(monkeypatch, fn):
 # ABC compliance + init
 # ---------------------------------------------------------------------------
 
+
 def test_subclass_of_source_fetcher():
     assert issubclass(FirecrawlIndexFetcher, SourceFetcher)
     assert FirecrawlIndexFetcher.source_type == "firecrawl_index"
@@ -74,6 +77,7 @@ def test_init_skips_missing_regex(capsys):
 # ---------------------------------------------------------------------------
 # Date parsers
 # ---------------------------------------------------------------------------
+
 
 def test_parse_index_date_strptime_ok():
     assert _parse_index_date("2026-05-20", "%Y-%m-%d") == datetime(2026, 5, 20, tzinfo=timezone.utc)
@@ -108,6 +112,7 @@ def test_parse_iso_date_variants():
 # Slug helpers
 # ---------------------------------------------------------------------------
 
+
 def test_url_slug_basic():
     assert _url_slug("https://example.com/news/some-post/") == "some-post"
     assert _url_slug("https://example.com/news/some-post?ref=x") == "some-post"
@@ -120,6 +125,7 @@ def test_slug_to_title_fallback():
 # ---------------------------------------------------------------------------
 # fetch() — empty / unavailable
 # ---------------------------------------------------------------------------
+
 
 def test_fetch_empty_entries():
     f = FirecrawlIndexFetcher([])
@@ -151,6 +157,7 @@ def test_fetch_empty_response(monkeypatch):
 # ---------------------------------------------------------------------------
 # fetch() — extracted dated articles
 # ---------------------------------------------------------------------------
+
 
 def test_fetch_uses_extracted_dates_and_filters_by_since(monkeypatch):
     articles = [
@@ -232,6 +239,7 @@ def test_fetch_markdown_fallback_dropped_under_since(monkeypatch):
 # fetch() — URL-encoded date fallback
 # ---------------------------------------------------------------------------
 
+
 def test_fetch_yymm_url_date_fallback(monkeypatch):
     """When extraction gives no date, fall back to a date parsed from the URL."""
     articles = [
@@ -256,6 +264,7 @@ def test_fetch_yymm_url_date_fallback(monkeypatch):
 # fetch() — filtering details
 # ---------------------------------------------------------------------------
 
+
 def test_fetch_scrape_error_isolated(monkeypatch, capsys):
     def scrape_index(url):
         if "anthropic" in url:
@@ -263,11 +272,16 @@ def test_fetch_scrape_error_isolated(monkeypatch, capsys):
         return _resp(articles=[_article("https://openai.com/index/cool-post", "2026-05-20")])
 
     _patch_index(monkeypatch, scrape_index)
-    f = FirecrawlIndexFetcher([
-        _entry(),
-        _entry(name="OpenAI News", url="https://openai.com/news",
-               article_url_regex=r"https?://openai\.com/(?:index/)?[a-z0-9-]+"),
-    ])
+    f = FirecrawlIndexFetcher(
+        [
+            _entry(),
+            _entry(
+                name="OpenAI News",
+                url="https://openai.com/news",
+                article_url_regex=r"https?://openai\.com/(?:index/)?[a-z0-9-]+",
+            ),
+        ]
+    )
     items = list(f.fetch(SINCE))
     assert [it.source for it in items] == ["OpenAI News"]
     assert "scrape failed" in capsys.readouterr().err
@@ -292,8 +306,12 @@ def test_fetch_max_items_cap(monkeypatch):
 
 
 def test_fetch_title_fallback_when_link_text_is_url(monkeypatch):
-    articles = [_article("https://www.anthropic.com/news/claude-4-7",
-                         title="https://www.anthropic.com/news/claude-4-7")]
+    articles = [
+        _article(
+            "https://www.anthropic.com/news/claude-4-7",
+            title="https://www.anthropic.com/news/claude-4-7",
+        )
+    ]
     _patch_index(monkeypatch, lambda url: _resp(articles=articles))
     f = FirecrawlIndexFetcher([_entry()])
     assert list(f.fetch(SINCE))[0].title == "Claude 4 7"
@@ -319,8 +337,10 @@ def test_fetch_strips_url_fragment_before_dedupe(monkeypatch):
 # fetch_full() — drill-down
 # ---------------------------------------------------------------------------
 
+
 def _item(url="https://www.anthropic.com/news/claude-4-7"):
     from brf.feed_item import FeedItem, make_id
+
     return FeedItem(
         id=make_id("firecrawl_index", url),
         source_type="firecrawl_index",

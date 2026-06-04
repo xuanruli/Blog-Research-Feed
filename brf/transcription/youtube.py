@@ -8,6 +8,7 @@ The fallback is what saves us when YouTube IP-bans the caption endpoint
 Metadata (title / channel / duration) comes from yt-dlp first, oEmbed
 second.
 """
+
 from __future__ import annotations
 
 import json
@@ -63,7 +64,7 @@ def _parse_video_id(url: str) -> Optional[str]:
         # /shorts/ID, /embed/ID, /v/ID, /live/ID
         for prefix in ("/shorts/", "/embed/", "/v/", "/live/"):
             if path.startswith(prefix):
-                vid = path[len(prefix):].split("/")[0]
+                vid = path[len(prefix) :].split("/")[0]
                 return vid if _VIDEO_ID_RE.match(vid) else None
 
     return None
@@ -302,9 +303,7 @@ def get_transcript(url: str) -> dict:
         return result
 
     result["status"] = status or "error"
-    result["error_message"] = (
-        f"captions: {err or 'unknown'}; whisper: {whisper_err or 'unknown'}"
-    )
+    result["error_message"] = f"captions: {err or 'unknown'}; whisper: {whisper_err or 'unknown'}"
     return result
 
 

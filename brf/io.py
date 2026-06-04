@@ -1,4 +1,5 @@
 """I/O helpers — stdout is the wire format between this CLI and the cron host."""
+
 from __future__ import annotations
 
 import json

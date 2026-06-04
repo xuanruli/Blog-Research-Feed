@@ -1,4 +1,5 @@
 """Tests for brf.fetchers.youtube.YouTubeFetcher (Phase 3b)."""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -13,6 +14,7 @@ from brf.fetchers.youtube import YouTubeFetcher
 # ---------------------------------------------------------------------------
 # Synthetic Atom feed helpers (YouTube channel RSS is Atom 1.0)
 # ---------------------------------------------------------------------------
+
 
 def _atom_entry(
     video_id: str,
@@ -53,6 +55,7 @@ SINCE = datetime(2026, 1, 1, tzinfo=timezone.utc)
 # Subclass / contract
 # ---------------------------------------------------------------------------
 
+
 def test_is_subclass_of_source_fetcher():
     assert issubclass(YouTubeFetcher, SourceFetcher)
     assert YouTubeFetcher.source_type == "youtube"
@@ -62,18 +65,20 @@ def test_is_subclass_of_source_fetcher():
 # fetch() — basic normalization
 # ---------------------------------------------------------------------------
 
+
 def test_rich_descriptions_do_not_call_ytdlp():
     rich_desc = "A thoughtful video about transformers and attention mechanisms. " * 3
-    entries = (
-        _atom_entry("abc12345678", "Video One", rich_desc)
-        + _atom_entry("def98765432", "Video Two", rich_desc)
+    entries = _atom_entry("abc12345678", "Video One", rich_desc) + _atom_entry(
+        "def98765432", "Video Two", rich_desc
     )
     xml = _channel_feed(entries)
     channels = [{"name": "Test Chan", "channel_id": "UC_xyz"}]
     f = YouTubeFetcher(channels=channels)
 
-    with patch("httpx.get", return_value=_mock_response(xml)) as mock_get, \
-         patch("brf.fetchers.youtube._ytdlp_metadata") as mock_meta:
+    with (
+        patch("httpx.get", return_value=_mock_response(xml)) as mock_get,
+        patch("brf.fetchers.youtube._ytdlp_metadata") as mock_meta,
+    ):
         results = list(f.fetch(since=SINCE))
 
     assert mock_get.call_count == 1
@@ -101,8 +106,10 @@ def test_empty_description_triggers_ytdlp_fallback():
         "description": "Recovered description text from yt-dlp metadata. " * 2,
         "duration": 1234,
     }
-    with patch("httpx.get", return_value=_mock_response(xml)), \
-         patch("brf.fetchers.youtube._ytdlp_metadata", return_value=fake_meta) as mock_meta:
+    with (
+        patch("httpx.get", return_value=_mock_response(xml)),
+        patch("brf.fetchers.youtube._ytdlp_metadata", return_value=fake_meta) as mock_meta,
+    ):
         results = list(f.fetch(since=SINCE))
 
     assert mock_meta.call_count == 1
@@ -120,8 +127,10 @@ def test_empty_description_and_ytdlp_fails_emits_empty_summary():
     channels = [{"name": "C", "channel_id": "UC_nada"}]
     f = YouTubeFetcher(channels=channels)
 
-    with patch("httpx.get", return_value=_mock_response(xml)), \
-         patch("brf.fetchers.youtube._ytdlp_metadata", return_value=None):
+    with (
+        patch("httpx.get", return_value=_mock_response(xml)),
+        patch("brf.fetchers.youtube._ytdlp_metadata", return_value=None),
+    ):
         results = list(f.fetch(since=SINCE))
 
     assert len(results) == 1
@@ -200,8 +209,10 @@ def test_http_failure_does_not_sink_other_channels():
 # fetch_full() — transcript wrapper
 # ---------------------------------------------------------------------------
 
+
 def _make_item(url: str = "https://www.youtube.com/watch?v=abc"):
     from brf.feed_item import FeedItem
+
     return FeedItem(
         id=make_id("youtube", url),
         source_type="youtube",

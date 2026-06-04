@@ -14,6 +14,7 @@ Usage:
     # Or load them from a local dotenv file:
     python -m scripts.upload_env --from-file .env.production
 """
+
 from __future__ import annotations
 
 import argparse
@@ -64,7 +65,10 @@ def main() -> int:
         return 2
 
     payload = _build_env_payload()
-    print(f"payload: {len(payload)} bytes, {len(PASSTHROUGH_KEYS) - len(missing)} keys", file=sys.stderr)
+    print(
+        f"payload: {len(payload)} bytes, {len(PASSTHROUGH_KEYS) - len(missing)} keys",
+        file=sys.stderr,
+    )
 
     from anthropic import Anthropic
 
@@ -72,8 +76,7 @@ def main() -> int:
     uploaded = _upload_env_file(client, payload)
     print(uploaded.id)
     print(
-        f"Persist this as the ENV_FILE_ID GitHub Actions variable. "
-        f"Betas used: {FILES_BETAS}",
+        f"Persist this as the ENV_FILE_ID GitHub Actions variable. Betas used: {FILES_BETAS}",
         file=sys.stderr,
     )
     return 0

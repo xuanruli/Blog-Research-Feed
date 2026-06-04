@@ -20,6 +20,7 @@ Usage:
     python scripts/create_agent.py            # create new (idempotent)
     python scripts/create_agent.py --update   # update existing by name
 """
+
 from __future__ import annotations
 
 import argparse
@@ -83,9 +84,9 @@ def load_env_config() -> tuple[str, dict[str, Any]]:
         return ENV_NAME_DEFAULT, ENV_CONFIG_DEFAULT
     raw = yaml.safe_load(ENV_YAML_PATH.read_text(encoding="utf-8")) or {}
     name = raw.get("name", ENV_NAME_DEFAULT)
-    config = raw.get("config") or {
-        k: v for k, v in raw.items() if k != "name"
-    } or ENV_CONFIG_DEFAULT
+    config = (
+        raw.get("config") or {k: v for k, v in raw.items() if k != "name"} or ENV_CONFIG_DEFAULT
+    )
     return name, config
 
 
@@ -130,9 +131,7 @@ def _resolve_multiagent(
             continue
         name = entry.get("name")
         if name is None:
-            raise RuntimeError(
-                f"multiagent entry has no `id` or `name`: {entry!r}"
-            )
+            raise RuntimeError(f"multiagent entry has no `id` or `name`: {entry!r}")
         agent_id = name_to_id.get(name)
         if agent_id is None:
             raise RuntimeError(
@@ -168,9 +167,7 @@ def ensure_agent(
             file=sys.stderr,
         )
         update_kwargs = {k: v for k, v in create_kwargs.items() if k != "name"}
-        return client.beta.agents.update(
-            existing.id, version=existing.version, **update_kwargs
-        )
+        return client.beta.agents.update(existing.id, version=existing.version, **update_kwargs)
     if existing and not update:
         print(
             f"# Agent '{name}' already exists (id={existing.id}). "

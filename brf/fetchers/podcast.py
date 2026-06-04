@@ -12,6 +12,7 @@ See BRF_FETCHER_DESIGN.md §3.4 (PodcastFetcher row). Responsible for:
 The bulk fetch/parse/since-filter scaffolding lives in
 :class:`brf.fetchers.feed_fetcher.FeedFetcher`.
 """
+
 from __future__ import annotations
 
 import os
@@ -46,18 +47,14 @@ class PodcastFetcher(FeedFetcher):
         passed the raw list).
         """
         self.max_workers = max(1, int(max_workers))
-        self._feeds: list[dict] = [
-            f for f in feeds if f.get("enabled", True) is not False
-        ]
+        self._feeds: list[dict] = [f for f in feeds if f.get("enabled", True) is not False]
 
     # -- FeedFetcher hooks ---------------------------------------------------
 
     def _feed_units(self) -> list[tuple[str, dict]]:
         return [(f["url"], f) for f in self._feeds]
 
-    def _normalize(
-        self, entry: dict, meta: dict, source_title: str
-    ) -> Optional[FeedItem]:
+    def _normalize(self, entry: dict, meta: dict, source_title: str) -> Optional[FeedItem]:
         link = entry.get("link") or ""
         audio_url = entry.get("audio_url")
         # Use the page URL when present, else audio URL — but we need
@@ -66,9 +63,7 @@ class PodcastFetcher(FeedFetcher):
         if not item_url:
             return None
 
-        summary = _truncate(
-            _strip_html(entry.get("summary") or ""), SUMMARY_MAX_CHARS
-        )
+        summary = _truncate(_strip_html(entry.get("summary") or ""), SUMMARY_MAX_CHARS)
         return FeedItem(
             id=make_id("podcast", item_url),
             source_type="podcast",

@@ -1,4 +1,5 @@
 """Tests for brf.fetchers.podcast.PodcastFetcher (Phase 3c)."""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -13,6 +14,7 @@ from brf.fetchers.podcast import PodcastFetcher, _parse_duration
 # ---------------------------------------------------------------------------
 # Synthetic feed XML helpers
 # ---------------------------------------------------------------------------
+
 
 def _rss(items_xml: str, title: str = "Test Podcast") -> bytes:
     return (
@@ -42,9 +44,7 @@ def _ep(
         f"<pubDate>{pubdate}</pubDate>",
     ]
     if audio_url and not use_media:
-        parts.append(
-            f'<enclosure url="{audio_url}" type="audio/mpeg" length="12345"/>'
-        )
+        parts.append(f'<enclosure url="{audio_url}" type="audio/mpeg" length="12345"/>')
     if audio_url and use_media:
         parts.append(f'<media:content url="{audio_url}" type="audio/mpeg"/>')
     if duration is not None:
@@ -62,6 +62,7 @@ def _mock_response(content: bytes, status: int = 200) -> httpx.Response:
 # Class shape
 # ---------------------------------------------------------------------------
 
+
 def test_subclass_of_source_fetcher():
     assert issubclass(PodcastFetcher, SourceFetcher)
     assert PodcastFetcher.source_type == "podcast"
@@ -70,6 +71,7 @@ def test_subclass_of_source_fetcher():
 # ---------------------------------------------------------------------------
 # Duration parser
 # ---------------------------------------------------------------------------
+
 
 def test_parse_duration_seconds():
     assert _parse_duration("3600") == 3600
@@ -94,6 +96,7 @@ def test_parse_duration_unparseable():
 # fetch()
 # ---------------------------------------------------------------------------
 
+
 def test_three_episodes_yield_three_feed_items():
     xml = _rss(
         _ep("Ep 1", "https://pod.example/1", "first show notes content")
@@ -117,8 +120,7 @@ def test_three_episodes_yield_three_feed_items():
 
 
 def test_enclosure_audio_url_populated():
-    xml = _rss(_ep("Ep", "https://pod.example/1",
-                   audio_url="https://cdn.example.com/ep1.mp3"))
+    xml = _rss(_ep("Ep", "https://pod.example/1", audio_url="https://cdn.example.com/ep1.mp3"))
     f = PodcastFetcher(feeds=[{"name": "P", "url": "https://x/rss"}])
     with patch("httpx.get", return_value=_mock_response(xml)):
         results = list(f.fetch(since=datetime(2026, 1, 1, tzinfo=timezone.utc)))
@@ -127,9 +129,14 @@ def test_enclosure_audio_url_populated():
 
 
 def test_media_content_fallback():
-    xml = _rss(_ep("Ep", "https://pod.example/1",
-                   audio_url="https://cdn.example.com/ep1.mp3",
-                   use_media=True))
+    xml = _rss(
+        _ep(
+            "Ep",
+            "https://pod.example/1",
+            audio_url="https://cdn.example.com/ep1.mp3",
+            use_media=True,
+        )
+    )
     f = PodcastFetcher(feeds=[{"name": "P", "url": "https://x/rss"}])
     with patch("httpx.get", return_value=_mock_response(xml)):
         results = list(f.fetch(since=datetime(2026, 1, 1, tzinfo=timezone.utc)))
@@ -207,9 +214,8 @@ def test_disabled_feeds_filtered_defensively():
     """PodcastFetcher should iterate whatever it's given, but defensively
     honor `enabled=false` in case caller passes the raw list."""
     feeds = [
-        {"name": "On",  "url": "https://on.example/rss"},
-        {"name": "Off", "url": "https://off.example/rss", "enabled": False,
-         "reason": "dead"},
+        {"name": "On", "url": "https://on.example/rss"},
+        {"name": "Off", "url": "https://off.example/rss", "enabled": False, "reason": "dead"},
     ]
     xml = _rss(_ep("Ep", "https://pod.example/1"))
     seen_urls: list[str] = []
@@ -228,8 +234,10 @@ def test_disabled_feeds_filtered_defensively():
 # fetch_full()
 # ---------------------------------------------------------------------------
 
+
 def _item_with(audio_url):
     from brf.feed_item import FeedItem
+
     return FeedItem(
         id="abc1234567890def",
         source_type="podcast",
@@ -240,8 +248,7 @@ def _item_with(audio_url):
         summary="notes",
         has_full=False,
         needs_firecrawl=False,
-        extra={"audio_url": audio_url, "duration_seconds": 60,
-               "feed_url": "https://x/rss"},
+        extra={"audio_url": audio_url, "duration_seconds": 60, "feed_url": "https://x/rss"},
     )
 
 
@@ -262,9 +269,11 @@ def test_fetch_full_success(tmp_path):
     def fake_transcribe(path, api_key):
         return "hello world transcript", "ok", None
 
-    with patch("brf.transcription.podcast._download_audio", side_effect=fake_download), \
-         patch("brf.transcription.podcast._transcribe_whisper", side_effect=fake_transcribe), \
-         patch("brf.config.get_env", return_value="sk-test"):
+    with (
+        patch("brf.transcription.podcast._download_audio", side_effect=fake_download),
+        patch("brf.transcription.podcast._transcribe_whisper", side_effect=fake_transcribe),
+        patch("brf.config.get_env", return_value="sk-test"),
+    ):
         result = f.fetch_full(item)
 
     assert result == b"hello world transcript"
@@ -274,10 +283,14 @@ def test_fetch_full_download_failure_returns_none(capsys):
     item = _item_with("https://cdn.example.com/ep.mp3")
     f = PodcastFetcher(feeds=[])
 
-    with patch("brf.transcription.podcast._download_audio",
-               return_value=(False, "download_failed", "http 404")), \
-         patch("brf.transcription.podcast._transcribe_whisper") as tx, \
-         patch("brf.config.get_env", return_value="sk-test"):
+    with (
+        patch(
+            "brf.transcription.podcast._download_audio",
+            return_value=(False, "download_failed", "http 404"),
+        ),
+        patch("brf.transcription.podcast._transcribe_whisper") as tx,
+        patch("brf.config.get_env", return_value="sk-test"),
+    ):
         assert f.fetch_full(item) is None
         tx.assert_not_called()
     assert "download failed" in capsys.readouterr().err
@@ -299,8 +312,12 @@ def test_fetch_full_whisper_failure_returns_none():
             fh.write(b"x")
         return True, None, None
 
-    with patch("brf.transcription.podcast._download_audio", side_effect=fake_download), \
-         patch("brf.transcription.podcast._transcribe_whisper",
-               return_value=(None, "transcription_failed", "http 500")), \
-         patch("brf.config.get_env", return_value="sk-test"):
+    with (
+        patch("brf.transcription.podcast._download_audio", side_effect=fake_download),
+        patch(
+            "brf.transcription.podcast._transcribe_whisper",
+            return_value=(None, "transcription_failed", "http 500"),
+        ),
+        patch("brf.config.get_env", return_value="sk-test"),
+    ):
         assert f.fetch_full(item) is None

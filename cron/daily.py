@@ -22,6 +22,7 @@ Run via:
 The agent itself drives all the work via the pre-installed ``brf`` CLI in
 bash inside its session container.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -199,19 +200,16 @@ def _find_active_by_name(items: Any, name: str) -> Any:
     matches = [
         x
         for x in items
-        if getattr(x, "name", None) == name
-        and getattr(x, "archived_at", None) is None
+        if getattr(x, "name", None) == name and getattr(x, "archived_at", None) is None
     ]
     if not matches:
         raise RuntimeError(
-            f"No active resource named {name!r}. "
-            "Run `python scripts/create_agent.py` to provision."
+            f"No active resource named {name!r}. Run `python scripts/create_agent.py` to provision."
         )
     if len(matches) > 1:
         ids = ", ".join(getattr(m, "id", "?") for m in matches)
         raise RuntimeError(
-            f"Multiple active resources named {name!r} ({ids}). "
-            "Archive the stale ones."
+            f"Multiple active resources named {name!r} ({ids}). Archive the stale ones."
         )
     return matches[0]
 
@@ -233,7 +231,9 @@ def _resolve_memory_store_id(client: Any) -> Optional[str]:
     try:
         match = _find_active_by_name(client.beta.memory_stores.list(), MEMORY_STORE_NAME)
     except RuntimeError as exc:
-        LOG.warning("memory store %r unavailable (%s) — running without memory", MEMORY_STORE_NAME, exc)
+        LOG.warning(
+            "memory store %r unavailable (%s) — running without memory", MEMORY_STORE_NAME, exc
+        )
         return None
     LOG.info("resolved memory_store.id=%s", match.id)
     return match.id
@@ -300,12 +300,14 @@ def run(dry_run: bool = False) -> int:
         ]
         memory_store_id = _resolve_memory_store_id(client)
         if memory_store_id:
-            resources.append({
-                "type": "memory_store",
-                "memory_store_id": memory_store_id,
-                "access": "read_write",
-                "instructions": MEMORY_STORE_INSTRUCTIONS,
-            })
+            resources.append(
+                {
+                    "type": "memory_store",
+                    "memory_store_id": memory_store_id,
+                    "access": "read_write",
+                    "instructions": MEMORY_STORE_INSTRUCTIONS,
+                }
+            )
 
         LOG.info("creating session agent=%s env=%s", agent_id, env_id)
         session = client.beta.sessions.create(
@@ -367,9 +369,11 @@ def run(dry_run: bool = False) -> int:
 # Reviewer is INTENTIONALLY excluded — coordinator may dispatch a 2nd
 # review round on the same thread to re-validate revisions, so the
 # reviewer thread needs to stay live across the session.
-_AUTO_ARCHIVE_AGENTS: frozenset[str] = frozenset({
-    "blog-research-feed-reader",
-})
+_AUTO_ARCHIVE_AGENTS: frozenset[str] = frozenset(
+    {
+        "blog-research-feed-reader",
+    }
+)
 
 
 def _archive_thread_safe(client: Any, session_id: str, thread_id: str, agent_name: str) -> None:
@@ -380,7 +384,9 @@ def _archive_thread_safe(client: Any, session_id: str, thread_id: str, agent_nam
     except Exception as exc:  # noqa: BLE001
         LOG.warning(
             "failed to archive %s thread %s: %s — slot stays occupied",
-            agent_name, thread_id, exc,
+            agent_name,
+            thread_id,
+            exc,
         )
 
 
@@ -431,8 +437,7 @@ def _drain(stream: Any, client: Any, session_id: str) -> None:
             LOG.info("agent.tool_result is_error=%s", err)
         elif etype == "agent.thinking":
             text = "".join(
-                getattr(b, "text", "") or ""
-                for b in (getattr(event, "content", []) or [])
+                getattr(b, "text", "") or "" for b in (getattr(event, "content", []) or [])
             )
             LOG.debug("agent.thinking: %s", _truncate(text, 200))
         # ---- multiagent thread events ----
@@ -461,9 +466,7 @@ def _drain(stream: Any, client: Any, session_id: str) -> None:
             # happen for an archived thread, but be defensive) is a no-op.
             if thread_id in reader_threads:
                 reader_threads.discard(thread_id)
-                _archive_thread_safe(
-                    client, session_id, thread_id, "blog-research-feed-reader"
-                )
+                _archive_thread_safe(client, session_id, thread_id, "blog-research-feed-reader")
         elif etype == "session.thread_status_terminated":
             LOG.warning(
                 "thread_terminated id=%s",
@@ -492,14 +495,13 @@ def _drain(stream: Any, client: Any, session_id: str) -> None:
             stop_type = getattr(stop, "type", None) if stop else None
             LOG.info(
                 "status_idle stop_reason=%s has_seen_running=%s",
-                stop_type, has_seen_running,
+                stop_type,
+                has_seen_running,
             )
             if not has_seen_running:
                 continue
             if stop_type == "requires_action":
-                LOG.warning(
-                    "unexpected requires_action without custom tools; continuing"
-                )
+                LOG.warning("unexpected requires_action without custom tools; continuing")
                 continue
             break
         elif etype == "session.status_terminated":

@@ -1,4 +1,5 @@
 """Tests for brf.fetchers.rss.RssFetcher (Phase 2)."""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -14,6 +15,7 @@ from brf.fetchers.rss import RssFetcher
 # ---------------------------------------------------------------------------
 # Synthetic feed XML helpers
 # ---------------------------------------------------------------------------
+
 
 def _rss(items_xml: str, title: str = "Test Feed") -> bytes:
     return (
@@ -41,6 +43,7 @@ def _mock_response(content: bytes, status: int = 200) -> httpx.Response:
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def output_dir(tmp_path: Path) -> Path:
     return tmp_path / "feed"
@@ -49,6 +52,7 @@ def output_dir(tmp_path: Path) -> Path:
 # ---------------------------------------------------------------------------
 # 3-branch normalize (RSS)
 # ---------------------------------------------------------------------------
+
 
 def test_full_branch_writes_html_and_sets_flags(output_dir: Path):
     content_html = "<p>Hello world. " + ("body content here. " * 30) + "</p>"
@@ -87,7 +91,9 @@ def test_full_branch_writes_html_and_sets_flags(output_dir: Path):
 
 
 def test_summary_branch_no_full_no_firecrawl(output_dir: Path):
-    desc = "This is a substantive description, well over eighty characters long indeed and then some."
+    desc = (
+        "This is a substantive description, well over eighty characters long indeed and then some."
+    )
     assert len(desc) >= 80
     items_xml = (
         "<item>"
@@ -139,7 +145,9 @@ def test_title_only_branch_needs_firecrawl(output_dir: Path):
 def test_summary_only_flag_forces_needs_firecrawl(output_dir: Path):
     """A feed marked summary_only=True forces needs_firecrawl even with
     a substantive description."""
-    desc = "This is a substantive description, well over eighty characters long indeed and then some."
+    desc = (
+        "This is a substantive description, well over eighty characters long indeed and then some."
+    )
     items_xml = (
         "<item>"
         "<title>HN-ish</title>"
@@ -148,11 +156,13 @@ def test_summary_only_flag_forces_needs_firecrawl(output_dir: Path):
         "</item>"
     )
     xml = _rss(items_xml)
-    feeds = [{
-        "name": "HN",
-        "url": "https://example.com/feed",
-        "summary_only": True,
-    }]
+    feeds = [
+        {
+            "name": "HN",
+            "url": "https://example.com/feed",
+            "summary_only": True,
+        }
+    ]
     f = RssFetcher(feeds=feeds, output_dir=output_dir)
 
     with patch("httpx.get", return_value=_mock_response(xml)):
@@ -168,6 +178,7 @@ def test_summary_only_flag_forces_needs_firecrawl(output_dir: Path):
 # ---------------------------------------------------------------------------
 # Atom variant
 # ---------------------------------------------------------------------------
+
 
 def test_atom_full_branch(output_dir: Path):
     body = "<div><p>Atom body content " + ("blah " * 50) + "</p></div>"
@@ -227,6 +238,7 @@ def test_atom_summary_branch(output_dir: Path):
 # Disabled feeds + id determinism
 # ---------------------------------------------------------------------------
 
+
 def test_disabled_feeds_silently_skipped(output_dir: Path):
     feeds = [
         {"name": "Dead", "url": "https://dead.example.com/feed", "enabled": False},
@@ -275,6 +287,7 @@ def test_make_id_matches_full_html_filename(output_dir: Path):
 # Firecrawl-fallback constructor handling
 # ---------------------------------------------------------------------------
 
+
 def test_firecrawl_fallback_empty_dict_disables(output_dir: Path):
     """Passing firecrawl_fallback={} routes all feeds through the live lane."""
     feeds = [
@@ -299,6 +312,7 @@ def test_firecrawl_fallback_default_routes_known_url(output_dir: Path):
 # ---------------------------------------------------------------------------
 # fetch_full
 # ---------------------------------------------------------------------------
+
 
 def test_fetch_full_returns_bytes(output_dir: Path):
     from brf.feed_item import FeedItem
@@ -346,6 +360,7 @@ def test_fetch_full_returns_none_on_failure(output_dir: Path):
 # since-filter
 # ---------------------------------------------------------------------------
 
+
 def test_since_filter_drops_old_items(output_dir: Path):
     items_xml = (
         "<item>"
@@ -375,6 +390,7 @@ def test_since_filter_drops_old_items(output_dir: Path):
 # ---------------------------------------------------------------------------
 # Network error handling — fetch() does not raise
 # ---------------------------------------------------------------------------
+
 
 def test_network_error_does_not_raise(output_dir: Path):
     feeds = [{"name": "x", "url": "https://example.com/feed"}]

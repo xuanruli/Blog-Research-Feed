@@ -11,6 +11,7 @@ Public API:
 * :func:`active_rss_feeds` — RSS entries with ``enabled`` not False.
 * :func:`active_podcast_feeds` — podcast entries with ``enabled`` not False.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -56,15 +57,11 @@ def load_sources(path: Path | None = None) -> dict[str, Any]:
         cfg = yaml.safe_load(fh)
 
     if not isinstance(cfg, dict):
-        raise ValueError(
-            f"{yaml_path}: top-level YAML must be a mapping, got {type(cfg).__name__}"
-        )
+        raise ValueError(f"{yaml_path}: top-level YAML must be a mapping, got {type(cfg).__name__}")
 
     missing = [k for k in _REQUIRED_KEYS if k not in cfg]
     if missing:
-        raise ValueError(
-            f"{yaml_path}: missing required top-level keys: {', '.join(missing)}"
-        )
+        raise ValueError(f"{yaml_path}: missing required top-level keys: {', '.join(missing)}")
     return cfg
 
 
