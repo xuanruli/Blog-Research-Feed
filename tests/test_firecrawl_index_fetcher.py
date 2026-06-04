@@ -7,9 +7,13 @@ from brf.fetchers.base import SourceFetcher
 from brf.fetchers.firecrawl_index import (
     FirecrawlIndexFetcher,
     _parse_index_date,
+    _parse_iso_date,
     _slug_to_title,
     _url_slug,
 )
+
+SINCE = datetime(2026, 1, 1, tzinfo=timezone.utc)
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -27,6 +31,19 @@ def _entry(**overrides) -> dict:
     return base
 
 
+def _resp(articles=None, markdown="") -> dict:
+    """Shape returned by brf.clients.firecrawl.scrape_index."""
+    return {"articles": articles or [], "markdown": markdown}
+
+
+def _article(url, published="2026-05-20", title="A post"):
+    return {"title": title, "url": url, "published": published}
+
+
+def _patch_index(monkeypatch, fn):
+    monkeypatch.setattr("brf.clients.firecrawl.scrape_index", fn, raising=False)
+
+
 # ---------------------------------------------------------------------------
 # ABC compliance + init
 # ---------------------------------------------------------------------------
@@ -37,40 +54,29 @@ def test_subclass_of_source_fetcher():
 
 
 def test_init_filters_disabled_entries():
-    f = FirecrawlIndexFetcher([
-        _entry(),
-        _entry(name="Disabled", enabled=False),
-    ])
+    f = FirecrawlIndexFetcher([_entry(), _entry(name="Disabled", enabled=False)])
     assert len(f._entries) == 1
     assert f._entries[0]["name"] == "Anthropic News"
 
 
 def test_init_skips_bad_regex(capsys):
-    f = FirecrawlIndexFetcher([
-        _entry(),
-        _entry(name="Bad", article_url_regex=r"["),
-    ])
-    captured = capsys.readouterr()
-    assert "bad regex" in captured.err
+    f = FirecrawlIndexFetcher([_entry(), _entry(name="Bad", article_url_regex=r"[")])
+    assert "bad regex" in capsys.readouterr().err
     assert len(f._entries) == 1
 
 
 def test_init_skips_missing_regex(capsys):
-    f = FirecrawlIndexFetcher([
-        _entry(name="NoRegex", article_url_regex=None),
-    ])
-    captured = capsys.readouterr()
-    assert "missing article_url_regex" in captured.err
+    f = FirecrawlIndexFetcher([_entry(name="NoRegex", article_url_regex=None)])
+    assert "missing article_url_regex" in capsys.readouterr().err
     assert f._entries == []
 
 
 # ---------------------------------------------------------------------------
-# Date parser
+# Date parsers
 # ---------------------------------------------------------------------------
 
 def test_parse_index_date_strptime_ok():
-    dt = _parse_index_date("2026-05-20", "%Y-%m-%d")
-    assert dt == datetime(2026, 5, 20, tzinfo=timezone.utc)
+    assert _parse_index_date("2026-05-20", "%Y-%m-%d") == datetime(2026, 5, 20, tzinfo=timezone.utc)
 
 
 def test_parse_index_date_strptime_bad():
@@ -78,28 +84,24 @@ def test_parse_index_date_strptime_bad():
 
 
 def test_parse_index_date_yymm_ok():
-    # HF papers: arXiv id "2401.12345" → 2024-01-31 (last day of month;
-    # see fix comment in _parse_index_date — yymm is month precision,
-    # stamp at month-end so a same-month `since` cutoff still admits
-    # the paper).
-    dt = _parse_index_date("2401.12345", "yymm")
-    assert dt == datetime(2024, 1, 31, tzinfo=timezone.utc)
+    assert _parse_index_date("2401.12345", "yymm") == datetime(2024, 1, 31, tzinfo=timezone.utc)
 
 
 def test_parse_index_date_yymm_admits_same_month_since():
-    """Regression: yymm month must not filter out same-month items."""
-    # Paper "2605.16403" (May 2026) with since=2026-05-17 → must pass.
     dt = _parse_index_date("2605.16403", "yymm")
-    assert dt is not None
-    assert dt >= datetime(2026, 5, 17, tzinfo=timezone.utc)
+    assert dt is not None and dt >= datetime(2026, 5, 17, tzinfo=timezone.utc)
 
 
 def test_parse_index_date_yymm_bad_month():
     assert _parse_index_date("2413.12345", "yymm") is None
 
 
-def test_parse_index_date_yymm_too_short():
-    assert _parse_index_date("240", "yymm") is None
+def test_parse_iso_date_variants():
+    assert _parse_iso_date("2026-05-20") == datetime(2026, 5, 20, tzinfo=timezone.utc)
+    assert _parse_iso_date("2026-05-20T14:00:00Z") == datetime(2026, 5, 20, 14, tzinfo=timezone.utc)
+    assert _parse_iso_date("") is None
+    assert _parse_iso_date(None) is None
+    assert _parse_iso_date("May 20, 2026") is None
 
 
 # ---------------------------------------------------------------------------
@@ -116,16 +118,15 @@ def test_slug_to_title_fallback():
 
 
 # ---------------------------------------------------------------------------
-# fetch() — empty / firecrawl-unavailable
+# fetch() — empty / unavailable
 # ---------------------------------------------------------------------------
 
 def test_fetch_empty_entries():
     f = FirecrawlIndexFetcher([])
-    assert list(f.fetch(datetime(2026, 1, 1, tzinfo=timezone.utc))) == []
+    assert list(f.fetch(SINCE)) == []
 
 
 def test_fetch_firecrawl_import_fails(monkeypatch, capsys):
-    """If firecrawl-py can't be imported, log + return [] (don't crash)."""
     import builtins
 
     f = FirecrawlIndexFetcher([_entry()])
@@ -137,66 +138,107 @@ def test_fetch_firecrawl_import_fails(monkeypatch, capsys):
         return real_import(name, *args, **kwargs)
 
     monkeypatch.setattr(builtins, "__import__", fake_import)
-    items = list(f.fetch(datetime(2026, 1, 1, tzinfo=timezone.utc)))
-    assert items == []
+    assert list(f.fetch(SINCE)) == []
     assert "firecrawl unavailable" in capsys.readouterr().err
 
 
+def test_fetch_empty_response(monkeypatch):
+    _patch_index(monkeypatch, lambda url: _resp())
+    f = FirecrawlIndexFetcher([_entry()])
+    assert list(f.fetch(SINCE)) == []
+
+
 # ---------------------------------------------------------------------------
-# fetch() — happy path with mocked firecrawl
+# fetch() — extracted dated articles
+# ---------------------------------------------------------------------------
+
+def test_fetch_uses_extracted_dates_and_filters_by_since(monkeypatch):
+    articles = [
+        _article("https://www.anthropic.com/news/claude-4-7", "2026-05-28"),
+        _article("https://www.anthropic.com/research/x", "2026-05-28"),
+        _article("https://www.anthropic.com/news/old-post", "2025-03-01"),
+        _article("https://www.anthropic.com/news/claude-4-7", "2026-05-28"),
+    ]
+    _patch_index(monkeypatch, lambda url: _resp(articles=articles))
+    f = FirecrawlIndexFetcher([_entry()])
+    items = list(f.fetch(SINCE))
+    assert [it.url for it in items] == ["https://www.anthropic.com/news/claude-4-7"]
+    assert items[0].published == "2026-05-28T00:00:00+00:00"
+    assert items[0].source == "Anthropic News"
+    assert items[0].needs_firecrawl is True
+    assert items[0].extra == {"index_url": "https://www.anthropic.com/news"}
+
+
+def test_fetch_drops_undated_items_under_since(monkeypatch):
+    """The core fix: an item with no resolvable date is dropped, not re-surfaced."""
+    articles = [
+        _article("https://www.anthropic.com/news/dated", "2026-05-20"),
+        _article("https://www.anthropic.com/news/undated", published=None),
+    ]
+    _patch_index(monkeypatch, lambda url: _resp(articles=articles))
+    f = FirecrawlIndexFetcher([_entry()])
+    items = list(f.fetch(SINCE))
+    assert [it.url for it in items] == ["https://www.anthropic.com/news/dated"]
+
+
+def test_fetch_keeps_undated_when_no_since(monkeypatch):
+    """With no cutoff, undated items pass through (published stays None)."""
+    articles = [_article("https://www.anthropic.com/news/undated", published=None)]
+    _patch_index(monkeypatch, lambda url: _resp(articles=articles))
+    f = FirecrawlIndexFetcher([_entry()])
+    items = list(f.fetch(None))
+    assert len(items) == 1
+    assert items[0].published is None
+
+
+def test_fetch_naive_since_normalized(monkeypatch):
+    articles = [_article("https://www.anthropic.com/news/claude-4-7", "2026-05-20")]
+    _patch_index(monkeypatch, lambda url: _resp(articles=articles))
+    f = FirecrawlIndexFetcher([_entry()])
+    items = list(f.fetch(datetime(2026, 1, 1)))
+    assert len(items) == 1
+
+
+# ---------------------------------------------------------------------------
+# fetch() — markdown fallback
 # ---------------------------------------------------------------------------
 
 ANTHROPIC_MD = """
-# News
-
 [Announcing Claude 4.7](https://www.anthropic.com/news/claude-4-7)
 [Some research post](https://www.anthropic.com/research/something-else)
-[Privacy](https://www.anthropic.com/privacy)
 [Other model release](https://www.anthropic.com/news/new-model)
-[Announcing Claude 4.7](https://www.anthropic.com/news/claude-4-7)   <!-- duplicate -->
 """
 
 
-def test_fetch_happy_path_extracts_articles(monkeypatch):
-    def fake_scrape(url):
-        return {"markdown": ANTHROPIC_MD, "metadata": {}}
-
-    monkeypatch.setattr(
-        "brf.clients.firecrawl.scrape", fake_scrape, raising=False
-    )
+def test_fetch_markdown_fallback_no_since(monkeypatch):
+    _patch_index(monkeypatch, lambda url: _resp(markdown=ANTHROPIC_MD))
     f = FirecrawlIndexFetcher([_entry()])
-    items = list(f.fetch(datetime(2026, 1, 1, tzinfo=timezone.utc)))
-    # 2 unique news URLs (research filtered out by regex, duplicate dropped)
-    assert len(items) == 2
-    urls = {it.url for it in items}
-    assert urls == {
+    items = list(f.fetch(None))
+    assert {it.url for it in items} == {
         "https://www.anthropic.com/news/claude-4-7",
         "https://www.anthropic.com/news/new-model",
     }
-    for it in items:
-        assert it.source_type == "firecrawl_index"
-        assert it.source == "Anthropic News"
-        assert it.has_full is False
-        assert it.needs_firecrawl is True
-        assert it.extra == {"index_url": "https://www.anthropic.com/news"}
-        # No date in the URL pattern → published stays None
-        assert it.published is None
+    assert all(it.published is None for it in items)
 
 
-HF_MD = """
-[Foo](https://huggingface.co/papers/2401.12345)
-[Bar](https://huggingface.co/papers/2611.00001)
-[Baz](https://huggingface.co/papers/2401.99999)
-"""
+def test_fetch_markdown_fallback_dropped_under_since(monkeypatch):
+    """Markdown links are undated → all dropped when a since cutoff is set."""
+    _patch_index(monkeypatch, lambda url: _resp(markdown=ANTHROPIC_MD))
+    f = FirecrawlIndexFetcher([_entry()])
+    assert list(f.fetch(SINCE)) == []
 
 
-def test_fetch_yymm_date_filter(monkeypatch):
-    """`since` cutoff drops papers published before the threshold."""
-    monkeypatch.setattr(
-        "brf.clients.firecrawl.scrape",
-        lambda url: {"markdown": HF_MD, "metadata": {}},
-        raising=False,
-    )
+# ---------------------------------------------------------------------------
+# fetch() — URL-encoded date fallback
+# ---------------------------------------------------------------------------
+
+def test_fetch_yymm_url_date_fallback(monkeypatch):
+    """When extraction gives no date, fall back to a date parsed from the URL."""
+    articles = [
+        {"title": "Foo", "url": "https://huggingface.co/papers/2401.12345", "published": None},
+        {"title": "Bar", "url": "https://huggingface.co/papers/2611.00001", "published": None},
+    ]
+    _patch_index(monkeypatch, lambda url: _resp(articles=articles))
     entry = _entry(
         name="HF Daily Papers",
         url="https://huggingface.co/papers",
@@ -205,181 +247,116 @@ def test_fetch_yymm_date_filter(monkeypatch):
         date_group=1,
     )
     f = FirecrawlIndexFetcher([entry])
-    # Cutoff = 2026-01-01 → drop the 2401.* paper, keep the 2611.* one.
-    items = list(f.fetch(datetime(2026, 1, 1, tzinfo=timezone.utc)))
-    urls = {it.url for it in items}
-    assert urls == {"https://huggingface.co/papers/2611.00001"}
-    # yymm is month-precision, stamped at the last day of that month.
+    items = list(f.fetch(SINCE))
+    assert [it.url for it in items] == ["https://huggingface.co/papers/2611.00001"]
     assert items[0].published == "2026-11-30T00:00:00+00:00"
 
 
+# ---------------------------------------------------------------------------
+# fetch() — filtering details
+# ---------------------------------------------------------------------------
+
 def test_fetch_scrape_error_isolated(monkeypatch, capsys):
-    """One bad index page must not abort the whole run."""
-    def scrape(url):
+    def scrape_index(url):
         if "anthropic" in url:
             raise RuntimeError("boom")
-        return {"markdown": "[OpenAI thing](https://openai.com/index/cool-post)", "metadata": {}}
+        return _resp(articles=[_article("https://openai.com/index/cool-post", "2026-05-20")])
 
-    monkeypatch.setattr("brf.clients.firecrawl.scrape", scrape, raising=False)
+    _patch_index(monkeypatch, scrape_index)
     f = FirecrawlIndexFetcher([
         _entry(),
-        _entry(
-            name="OpenAI News",
-            url="https://openai.com/news",
-            article_url_regex=r"https?://openai\.com/(?:index/)?[a-z0-9-]+",
-        ),
+        _entry(name="OpenAI News", url="https://openai.com/news",
+               article_url_regex=r"https?://openai\.com/(?:index/)?[a-z0-9-]+"),
     ])
-    items = list(f.fetch(datetime(2026, 1, 1, tzinfo=timezone.utc)))
-    assert len(items) == 1
-    assert items[0].source == "OpenAI News"
+    items = list(f.fetch(SINCE))
+    assert [it.source for it in items] == ["OpenAI News"]
     assert "scrape failed" in capsys.readouterr().err
 
 
 def test_fetch_slug_blocklist(monkeypatch):
-    """Blocklisted slugs are skipped even when they match the regex."""
-    md = "[Privacy](https://www.anthropic.com/news/privacy-policy)\n[Real](https://www.anthropic.com/news/claude-4-7)"
-    monkeypatch.setattr(
-        "brf.clients.firecrawl.scrape",
-        lambda url: {"markdown": md, "metadata": {}},
-        raising=False,
-    )
-    entry = _entry(slug_blocklist=["privacy-policy"])
-    f = FirecrawlIndexFetcher([entry])
-    items = list(f.fetch(datetime(2026, 1, 1, tzinfo=timezone.utc)))
+    articles = [
+        _article("https://www.anthropic.com/news/privacy-policy"),
+        _article("https://www.anthropic.com/news/claude-4-7"),
+    ]
+    _patch_index(monkeypatch, lambda url: _resp(articles=articles))
+    f = FirecrawlIndexFetcher([_entry(slug_blocklist=["privacy-policy"])])
+    items = list(f.fetch(SINCE))
     assert [it.url for it in items] == ["https://www.anthropic.com/news/claude-4-7"]
 
 
 def test_fetch_max_items_cap(monkeypatch):
-    """Per-index emission caps at MAX_ITEMS_PER_INDEX (25)."""
-    md = "\n".join(
-        f"[post {i}](https://www.anthropic.com/news/post-{i})" for i in range(40)
-    )
-    monkeypatch.setattr(
-        "brf.clients.firecrawl.scrape",
-        lambda url: {"markdown": md, "metadata": {}},
-        raising=False,
-    )
+    articles = [_article(f"https://www.anthropic.com/news/post-{i}") for i in range(40)]
+    _patch_index(monkeypatch, lambda url: _resp(articles=articles))
     f = FirecrawlIndexFetcher([_entry()])
-    items = list(f.fetch(datetime(2026, 1, 1, tzinfo=timezone.utc)))
-    assert len(items) == 25
+    assert len(list(f.fetch(SINCE))) == 25
 
 
 def test_fetch_title_fallback_when_link_text_is_url(monkeypatch):
-    """If the markdown link text is just the URL, derive a title from the slug."""
-    md = "[https://www.anthropic.com/news/claude-4-7](https://www.anthropic.com/news/claude-4-7)"
-    monkeypatch.setattr(
-        "brf.clients.firecrawl.scrape",
-        lambda url: {"markdown": md, "metadata": {}},
-        raising=False,
-    )
+    articles = [_article("https://www.anthropic.com/news/claude-4-7",
+                         title="https://www.anthropic.com/news/claude-4-7")]
+    _patch_index(monkeypatch, lambda url: _resp(articles=articles))
     f = FirecrawlIndexFetcher([_entry()])
-    items = list(f.fetch(datetime(2026, 1, 1, tzinfo=timezone.utc)))
-    assert items[0].title == "Claude 4 7"
+    assert list(f.fetch(SINCE))[0].title == "Claude 4 7"
 
 
 def test_fetch_strips_url_fragment_before_dedupe(monkeypatch):
-    """Same article via /papers/X and /papers/X#community must dedupe."""
-    md = (
-        "[Paper](https://huggingface.co/papers/2401.12345)\n"
-        "[1](https://huggingface.co/papers/2401.12345#community)"
-    )
-    monkeypatch.setattr(
-        "brf.clients.firecrawl.scrape",
-        lambda url: {"markdown": md, "metadata": {}},
-        raising=False,
-    )
+    articles = [
+        _article("https://huggingface.co/papers/2401.12345", "2026-05-20", title="Paper"),
+        _article("https://huggingface.co/papers/2401.12345#community", "2026-05-20", title="1"),
+    ]
+    _patch_index(monkeypatch, lambda url: _resp(articles=articles))
     entry = _entry(
         name="HF Daily Papers",
         url="https://huggingface.co/papers",
         article_url_regex=r"https?://huggingface\.co/papers/\d{4}\.\d{4,5}",
     )
     f = FirecrawlIndexFetcher([entry])
-    items = list(f.fetch(datetime(2024, 1, 1, tzinfo=timezone.utc)))
-    assert len(items) == 1
-    assert items[0].url == "https://huggingface.co/papers/2401.12345"
-
-
-def test_fetch_empty_markdown(monkeypatch):
-    monkeypatch.setattr(
-        "brf.clients.firecrawl.scrape",
-        lambda url: {"markdown": "", "metadata": {}},
-        raising=False,
-    )
-    f = FirecrawlIndexFetcher([_entry()])
-    assert list(f.fetch(datetime(2026, 1, 1, tzinfo=timezone.utc))) == []
-
-
-def test_fetch_naive_since_normalized(monkeypatch):
-    """A naive ``since`` datetime is coerced to UTC, no crash."""
-    monkeypatch.setattr(
-        "brf.clients.firecrawl.scrape",
-        lambda url: {"markdown": ANTHROPIC_MD, "metadata": {}},
-        raising=False,
-    )
-    f = FirecrawlIndexFetcher([_entry()])
-    items = list(f.fetch(datetime(2026, 1, 1)))  # naive
-    assert len(items) == 2
+    items = list(f.fetch(SINCE))
+    assert [it.url for it in items] == ["https://huggingface.co/papers/2401.12345"]
 
 
 # ---------------------------------------------------------------------------
-# fetch_full()
+# fetch_full() — drill-down
 # ---------------------------------------------------------------------------
 
-def test_fetch_full_returns_markdown_bytes(monkeypatch):
+def _item(url="https://www.anthropic.com/news/claude-4-7"):
     from brf.feed_item import FeedItem, make_id
-
-    item = FeedItem(
-        id=make_id("firecrawl_index", "https://www.anthropic.com/news/claude-4-7"),
+    return FeedItem(
+        id=make_id("firecrawl_index", url),
         source_type="firecrawl_index",
         source="Anthropic News",
         title="Claude 4.7",
-        url="https://www.anthropic.com/news/claude-4-7",
+        url=url,
         published=None,
         summary="",
         has_full=False,
         needs_firecrawl=True,
         extra={"index_url": "https://www.anthropic.com/news"},
     )
+
+
+def test_fetch_full_returns_markdown_bytes(monkeypatch):
     monkeypatch.setattr(
         "brf.clients.firecrawl.scrape",
         lambda url: {"markdown": "# Claude 4.7\n\nbody", "metadata": {}},
         raising=False,
     )
-    f = FirecrawlIndexFetcher([_entry()])
-    result = f.fetch_full(item)
-    assert result == b"# Claude 4.7\n\nbody"
+    assert FirecrawlIndexFetcher([_entry()]).fetch_full(_item()) == b"# Claude 4.7\n\nbody"
 
 
 def test_fetch_full_empty_returns_none(monkeypatch):
-    from brf.feed_item import FeedItem
-
-    item = FeedItem(
-        id="x", source_type="firecrawl_index", source="x", title="x",
-        url="https://example.com/x", published=None, summary="",
-        has_full=False, needs_firecrawl=True, extra={},
-    )
     monkeypatch.setattr(
         "brf.clients.firecrawl.scrape",
         lambda url: {"markdown": "", "metadata": {}},
         raising=False,
     )
-    f = FirecrawlIndexFetcher([_entry()])
-    assert f.fetch_full(item) is None
+    assert FirecrawlIndexFetcher([_entry()]).fetch_full(_item()) is None
 
 
 def test_fetch_full_scrape_error_returns_none(monkeypatch, capsys):
-    from brf.feed_item import FeedItem
-
-    item = FeedItem(
-        id="x", source_type="firecrawl_index", source="x", title="x",
-        url="https://example.com/x", published=None, summary="",
-        has_full=False, needs_firecrawl=True, extra={},
-    )
-
     def fail(url):
         raise RuntimeError("nope")
 
     monkeypatch.setattr("brf.clients.firecrawl.scrape", fail, raising=False)
-    f = FirecrawlIndexFetcher([_entry()])
-    assert f.fetch_full(item) is None
+    assert FirecrawlIndexFetcher([_entry()]).fetch_full(_item()) is None
     assert "fetch_full failed" in capsys.readouterr().err

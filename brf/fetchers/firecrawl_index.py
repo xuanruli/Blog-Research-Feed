@@ -3,12 +3,13 @@
 See BRF_FETCHER_DESIGN.md §3.4 (FirecrawlIndexFetcher row) + §3.3
 (sequential concurrency note). Responsible for:
 
-* Firecrawl-scrape each configured index page (e.g.,
-  ``https://www.anthropic.com/news``), regex-extract article URLs from
-  the returned markdown.
-* Per-URL parse: optionally pull a date out of the URL via
-  ``date_format`` / ``date_group`` (handles ``%Y-%m-%d`` slugs and the
-  HF papers ``yymm`` arXiv-id convention).
+* Firecrawl JSON-extract each configured index page (e.g.,
+  ``https://www.anthropic.com/news``) into ``{title, url, published}`` per
+  article; ``article_url_regex`` filters those down to real article URLs.
+* Resolve each item's date from the extracted ``published``, falling back to
+  a date parsed out of the URL (``date_format``/``date_group``: ``%Y-%m-%d``
+  slugs and the HF papers ``yymm`` arXiv-id convention). Under a ``since``
+  cutoff, items that can't be dated are dropped, not re-surfaced every run.
 * Emit ``FeedItem(source_type="firecrawl_index", has_full=False,
   needs_firecrawl=True)``. The agent drills down via ``fetch_full``,
   which firecrawl-scrapes the article URL and returns markdown bytes.
@@ -69,6 +70,22 @@ def _parse_index_date(raw: str, fmt: str) -> Optional[datetime]:
             return None
     try:
         return datetime.strptime(raw, fmt).replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
+def _parse_iso_date(raw: Optional[str]) -> Optional[datetime]:
+    """Parse an extracted ``YYYY-MM-DD`` / ISO date to UTC-aware; ``None`` on failure."""
+    if not raw:
+        return None
+    raw = raw.strip()
+    try:
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    except ValueError:
+        pass
+    try:
+        return datetime.strptime(raw, "%Y-%m-%d").replace(tzinfo=timezone.utc)
     except ValueError:
         return None
 
@@ -137,7 +154,7 @@ class FirecrawlIndexFetcher(SourceFetcher):
             return []
 
         try:
-            from brf.clients.firecrawl import scrape as fc_scrape
+            from brf.clients.firecrawl import scrape_index
         except Exception as exc:
             print(
                 f"[firecrawl_index] firecrawl unavailable, skipping all "
@@ -153,7 +170,7 @@ class FirecrawlIndexFetcher(SourceFetcher):
         all_items: list[FeedItem] = []
         for entry in self._entries:
             try:
-                all_items.extend(self._fetch_one(entry, fc_scrape, since_cmp))
+                all_items.extend(self._fetch_one(entry, scrape_index, since_cmp))
             except Exception as exc:
                 print(
                     f"[firecrawl_index] crashed for {entry['url']}: {exc}",
@@ -164,12 +181,12 @@ class FirecrawlIndexFetcher(SourceFetcher):
     def _fetch_one(
         self,
         entry: dict,
-        fc_scrape,
+        scrape_index,
         since_cmp: Optional[datetime],
     ) -> list[FeedItem]:
         index_url: str = entry["url"]
         try:
-            resp = fc_scrape(index_url)
+            resp = scrape_index(index_url)
         except Exception as exc:
             print(
                 f"[firecrawl_index] scrape failed for {index_url}: {exc}",
@@ -177,8 +194,8 @@ class FirecrawlIndexFetcher(SourceFetcher):
             )
             return []
 
-        markdown = (resp.get("markdown") or "") if isinstance(resp, dict) else ""
-        if not markdown:
+        candidates = self._candidates(resp)
+        if not candidates:
             return []
 
         pattern: re.Pattern[str] = entry["pattern"]
@@ -189,15 +206,10 @@ class FirecrawlIndexFetcher(SourceFetcher):
 
         items: list[FeedItem] = []
         seen_urls: set[str] = set()
-        for m in _MD_LINK_RE.finditer(markdown):
-            link_text = m.group(1).strip()
-            url = m.group(2).strip().rstrip(".,;)")
-            # Drop fragment so e.g. /papers/2605.16403 and
-            # /papers/2605.16403#community dedupe to the same item.
-            url = url.split("#", 1)[0]
+        for link_text, raw_url, raw_date in candidates:
+            url = (raw_url or "").split("#", 1)[0].rstrip(".,;)")
             if not url:
                 continue
-
             article_m = pattern.match(url)
             if not article_m:
                 continue
@@ -207,21 +219,11 @@ class FirecrawlIndexFetcher(SourceFetcher):
             if slug_blocklist and _url_slug(url) in slug_blocklist:
                 continue
 
-            published_iso: Optional[str] = None
-            if date_group is not None and date_format:
-                try:
-                    captured = article_m.group(date_group)
-                except (IndexError, re.error):
-                    captured = None
-                if captured:
-                    dt = _parse_index_date(captured, date_format)
-                    if dt is not None:
-                        if since_cmp is not None and dt < since_cmp:
-                            continue
-                        published_iso = dt.isoformat()
+            dt = _parse_iso_date(raw_date) or self._url_date(article_m, date_format, date_group)
+            if since_cmp is not None and (dt is None or dt < since_cmp):
+                continue
+            published_iso = dt.isoformat() if dt is not None else None
 
-            # Fall back to a slug-derived title when the markdown link
-            # text is empty or looks like a bare URL.
             title = link_text
             if not title or title.startswith("http"):
                 title = _slug_to_title(url)
@@ -242,6 +244,30 @@ class FirecrawlIndexFetcher(SourceFetcher):
                 break
 
         return items
+
+    @staticmethod
+    def _candidates(resp) -> list[tuple[str, str, Optional[str]]]:
+        """Return ``[(title, url, raw_date), ...]`` from extracted articles, else markdown links."""
+        if not isinstance(resp, dict):
+            return []
+        articles = resp.get("articles") or []
+        if articles:
+            return [(a.get("title") or "", a.get("url") or "", a.get("published")) for a in articles]
+        markdown = resp.get("markdown") or ""
+        return [(m.group(1).strip(), m.group(2).strip(), None) for m in _MD_LINK_RE.finditer(markdown)]
+
+    @staticmethod
+    def _url_date(
+        article_m: "re.Match[str]", date_format: Optional[str], date_group: Optional[int]
+    ) -> Optional[datetime]:
+        """Date pulled from the article URL via ``date_format``/``date_group``, if configured."""
+        if date_group is None or not date_format:
+            return None
+        try:
+            captured = article_m.group(date_group)
+        except (IndexError, re.error):
+            return None
+        return _parse_index_date(captured, date_format) if captured else None
 
     # -- drill-down ----------------------------------------------------------
 
