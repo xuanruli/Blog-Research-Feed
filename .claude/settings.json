@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "deslop": {
+      "source": {
+        "source": "github",
+        "repo": "xuanruli/Deslop"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "deslop@deslop": true
+  }
+}
