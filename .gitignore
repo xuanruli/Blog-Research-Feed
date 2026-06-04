@@ -35,5 +35,5 @@ Thumbs.db
 dist/
 build/
 
-# Installed skill copies (npx skills add)
+# Installed skill copies (npx skills add); pinned via skills-lock.json
 .agents/
