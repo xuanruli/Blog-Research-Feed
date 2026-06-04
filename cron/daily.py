@@ -11,6 +11,7 @@ import os
 import signal
 import sys
 import threading
+import time
 from pathlib import Path
 from typing import Any, Optional
 
@@ -56,7 +57,7 @@ def _setup_logging() -> None:
         datefmt="%Y-%m-%dT%H:%M:%S",
         stream=sys.stderr,
     )
-    logging.Formatter.converter = __import__("time").gmtime
+    logging.Formatter.converter = time.gmtime
 
 
 class _Timeout(RuntimeError):
@@ -317,91 +318,157 @@ def _archive_thread_safe(client: Any, session_id: str, thread_id: str, agent_nam
         )
 
 
+class _DrainState:
+    """Per-drain bookkeeping: reader threads awaiting reaping, and whether the session ran."""
+
+    def __init__(self, client: Any, session_id: str):
+        self._client = client
+        self._session_id = session_id
+        self._reader_threads: set[str] = set()
+        self.has_seen_running = False
+
+    def track(self, agent_name: str, thread_id: str) -> None:
+        """Remember a new reader thread so it can be archived once it idles."""
+        if thread_id and agent_name in _AUTO_ARCHIVE_AGENTS:
+            self._reader_threads.add(thread_id)
+
+    def reap(self, thread_id: str) -> None:
+        """Archive a reader thread the moment it idles, freeing its concurrency slot."""
+        if thread_id not in self._reader_threads:
+            return
+        self._reader_threads.discard(thread_id)
+        _archive_thread_safe(self._client, self._session_id, thread_id, "blog-research-feed-reader")
+
+
+def _on_agent_message(event: Any, state: _DrainState) -> bool:
+    for block in getattr(event, "content", []) or []:
+        if getattr(block, "type", None) == "text":
+            LOG.info("agent.message: %s", _truncate(block.text))
+    return False
+
+
+def _on_tool_use(event: Any, state: _DrainState) -> bool:
+    LOG.info("agent.tool_use name=%s", getattr(event, "name", "?"))
+    return False
+
+
+def _on_tool_result(event: Any, state: _DrainState) -> bool:
+    LOG.info("agent.tool_result is_error=%s", getattr(event, "is_error", False))
+    return False
+
+
+def _on_thinking(event: Any, state: _DrainState) -> bool:
+    text = "".join(getattr(b, "text", "") or "" for b in (getattr(event, "content", []) or []))
+    LOG.debug("agent.thinking: %s", _truncate(text, 200))
+    return False
+
+
+def _on_thread_created(event: Any, state: _DrainState) -> bool:
+    agent_name = getattr(event, "agent_name", "?")
+    thread_id = getattr(event, "session_thread_id", "?")
+    LOG.info("thread_created agent=%s id=%s", agent_name, thread_id)
+    state.track(agent_name, thread_id)
+    return False
+
+
+def _on_thread_running(event: Any, state: _DrainState) -> bool:
+    LOG.info("thread_running id=%s", getattr(event, "session_thread_id", "?"))
+    return False
+
+
+def _on_thread_idle(event: Any, state: _DrainState) -> bool:
+    thread_id = getattr(event, "session_thread_id", "?")
+    LOG.info(
+        "thread_idle id=%s stop_reason=%s",
+        thread_id,
+        getattr(getattr(event, "stop_reason", None), "type", None),
+    )
+    state.reap(thread_id)
+    return False
+
+
+def _on_thread_terminated(event: Any, state: _DrainState) -> bool:
+    LOG.warning("thread_terminated id=%s", getattr(event, "session_thread_id", "?"))
+    return False
+
+
+def _on_thread_msg_sent(event: Any, state: _DrainState) -> bool:
+    LOG.info(
+        "thread_msg_sent to=%s thread=%s",
+        getattr(event, "to_agent_name", "?"),
+        getattr(event, "to_session_thread_id", "?"),
+    )
+    return False
+
+
+def _on_thread_msg_received(event: Any, state: _DrainState) -> bool:
+    # Don't reap here: the thread is often still running; reap on its idle event.
+    LOG.info(
+        "thread_msg_received from=%s thread=%s",
+        getattr(event, "from_agent_name", "?"),
+        getattr(event, "from_session_thread_id", None),
+    )
+    return False
+
+
+def _on_status_running(event: Any, state: _DrainState) -> bool:
+    state.has_seen_running = True
+    LOG.info("status_running")
+    return False
+
+
+def _on_status_idle(event: Any, state: _DrainState) -> bool:
+    stop_type = getattr(getattr(event, "stop_reason", None), "type", None)
+    LOG.info("status_idle stop_reason=%s has_seen_running=%s", stop_type, state.has_seen_running)
+    if not state.has_seen_running:
+        return False
+    if stop_type == "requires_action":
+        LOG.warning("unexpected requires_action without custom tools; continuing")
+        return False
+    return True
+
+
+def _on_status_terminated(event: Any, state: _DrainState) -> bool:
+    LOG.warning("session.status_terminated")
+    return True
+
+
+def _on_session_error(event: Any, state: _DrainState) -> bool:
+    err = getattr(event, "error", None)
+    LOG.error("session.error: %s", getattr(err, "message", None) if err else "unknown")
+    return True
+
+
+# event type -> handler(event, state) -> stop draining?  Unmapped types just log at debug.
+_STREAM_HANDLERS: dict[str, Any] = {
+    "agent.message": _on_agent_message,
+    "agent.tool_use": _on_tool_use,
+    "agent.tool_result": _on_tool_result,
+    "agent.thinking": _on_thinking,
+    "session.thread_created": _on_thread_created,
+    "session.thread_status_running": _on_thread_running,
+    "session.thread_status_idle": _on_thread_idle,
+    "session.thread_status_terminated": _on_thread_terminated,
+    "agent.thread_message_sent": _on_thread_msg_sent,
+    "agent.thread_message_received": _on_thread_msg_received,
+    "session.status_running": _on_status_running,
+    "session.status_idle": _on_status_idle,
+    "session.status_terminated": _on_status_terminated,
+    "session.error": _on_session_error,
+}
+
+
 def _drain(stream: Any, client: Any, session_id: str) -> None:
-    """Consume the SSE stream, archiving reader threads as they go idle, until the session ends."""
-    has_seen_running = False
-    reader_threads: set[str] = set()
+    """Consume the SSE stream, reaping reader threads as they idle, until the session ends."""
+    state = _DrainState(client, session_id)
     for event in stream:
         etype = getattr(event, "type", None)
-        if etype == "agent.message":
-            for block in getattr(event, "content", []) or []:
-                if getattr(block, "type", None) == "text":
-                    LOG.info("agent.message: %s", _truncate(block.text))
-        elif etype == "agent.tool_use":
-            name = getattr(event, "name", "?")
-            LOG.info("agent.tool_use name=%s", name)
-        elif etype == "agent.tool_result":
-            err = getattr(event, "is_error", False)
-            LOG.info("agent.tool_result is_error=%s", err)
-        elif etype == "agent.thinking":
-            text = "".join(
-                getattr(b, "text", "") or "" for b in (getattr(event, "content", []) or [])
-            )
-            LOG.debug("agent.thinking: %s", _truncate(text, 200))
-        elif etype == "session.thread_created":
-            agent_name = getattr(event, "agent_name", "?")
-            thread_id = getattr(event, "session_thread_id", "?")
-            LOG.info("thread_created agent=%s id=%s", agent_name, thread_id)
-            if thread_id and agent_name in _AUTO_ARCHIVE_AGENTS:
-                reader_threads.add(thread_id)
-        elif etype == "session.thread_status_running":
-            LOG.info(
-                "thread_running id=%s",
-                getattr(event, "session_thread_id", "?"),
-            )
-        elif etype == "session.thread_status_idle":
-            thread_id = getattr(event, "session_thread_id", "?")
-            LOG.info(
-                "thread_idle id=%s stop_reason=%s",
-                thread_id,
-                getattr(getattr(event, "stop_reason", None), "type", None),
-            )
-            if thread_id in reader_threads:
-                reader_threads.discard(thread_id)
-                _archive_thread_safe(client, session_id, thread_id, "blog-research-feed-reader")
-        elif etype == "session.thread_status_terminated":
-            LOG.warning(
-                "thread_terminated id=%s",
-                getattr(event, "session_thread_id", "?"),
-            )
-        elif etype == "agent.thread_message_sent":
-            LOG.info(
-                "thread_msg_sent to=%s thread=%s",
-                getattr(event, "to_agent_name", "?"),
-                getattr(event, "to_session_thread_id", "?"),
-            )
-        elif etype == "agent.thread_message_received":
-            from_agent = getattr(event, "from_agent_name", "?")
-            from_thread = getattr(event, "from_session_thread_id", None)
-            LOG.info("thread_msg_received from=%s thread=%s", from_agent, from_thread)
-            # Don't archive here: the thread is often still running; archive on its idle event.
-        elif etype == "session.status_running":
-            has_seen_running = True
-            LOG.info("status_running")
-        elif etype == "session.status_idle":
-            stop = getattr(event, "stop_reason", None)
-            stop_type = getattr(stop, "type", None) if stop else None
-            LOG.info(
-                "status_idle stop_reason=%s has_seen_running=%s",
-                stop_type,
-                has_seen_running,
-            )
-            if not has_seen_running:
-                continue
-            if stop_type == "requires_action":
-                LOG.warning("unexpected requires_action without custom tools; continuing")
-                continue
-            break
-        elif etype == "session.status_terminated":
-            LOG.warning("session.status_terminated")
-            break
-        elif etype == "session.error":
-            err = getattr(event, "error", None)
-            msg = getattr(err, "message", None) if err else "unknown"
-            LOG.error("session.error: %s", msg)
-            break
-        else:
+        handler = _STREAM_HANDLERS.get(etype)
+        if handler is None:
             LOG.debug("event %s", etype)
+            continue
+        if handler(event, state):
+            break
 
 
 def _truncate(text: str, limit: int = 500) -> str:

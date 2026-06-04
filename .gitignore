@@ -34,3 +34,6 @@ Thumbs.db
 # Python build artifacts
 dist/
 build/
+
+# Installed skill copies (npx skills add)
+.agents/
