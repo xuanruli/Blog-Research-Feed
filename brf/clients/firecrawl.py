@@ -123,11 +123,13 @@ def scrape_index(url: str) -> dict:
         u = _get(a, "url")
         if not u:
             continue
-        out_articles.append({
-            "title": (_get(a, "title") or "").strip(),
-            "url": str(u).strip(),
-            "published": _get(a, "published_date") or _get(a, "published"),
-        })
+        out_articles.append(
+            {
+                "title": (_get(a, "title") or "").strip(),
+                "url": str(u).strip(),
+                "published": _get(a, "published_date") or _get(a, "published"),
+            }
+        )
     return {"articles": out_articles, "markdown": markdown}
 
 

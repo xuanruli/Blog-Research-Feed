@@ -258,9 +258,13 @@ class FirecrawlIndexFetcher(SourceFetcher):
             return []
         articles = resp.get("articles") or []
         if articles:
-            return [(a.get("title") or "", a.get("url") or "", a.get("published")) for a in articles]
+            return [
+                (a.get("title") or "", a.get("url") or "", a.get("published")) for a in articles
+            ]
         markdown = resp.get("markdown") or ""
-        return [(m.group(1).strip(), m.group(2).strip(), None) for m in _MD_LINK_RE.finditer(markdown)]
+        return [
+            (m.group(1).strip(), m.group(2).strip(), None) for m in _MD_LINK_RE.finditer(markdown)
+        ]
 
     @staticmethod
     def _url_date(
