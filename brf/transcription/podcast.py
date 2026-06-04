@@ -15,8 +15,8 @@ from typing import Optional
 
 import httpx
 
-from .config import get_env
-from .transcription import WHISPER_MAX_BYTES as _MAX_BYTES
+from ..config import get_env
+from .whisper import WHISPER_MAX_BYTES as _MAX_BYTES
 
 
 def _pick_enclosure_url(entry) -> Optional[str]:
@@ -71,7 +71,7 @@ def _transcribe_whisper(
     path: str, api_key: str
 ) -> tuple[Optional[str], Optional[str], Optional[str]]:
     """Upload `path` to OpenAI Whisper. Returns (text, status, error_message)."""
-    from .transcription import transcribe
+    from .whisper import transcribe
 
     text, err = transcribe(path, api_key)
     if text is None:
@@ -172,7 +172,7 @@ def get_transcript(rss_url: str, episode_index: int = 0) -> dict:
 
 if __name__ == "__main__":  # pragma: no cover
     if len(sys.argv) < 2:
-        print("usage: python -m brf.podcast <rss-url> [episode_index]", file=sys.stderr)
+        print("usage: python -m brf.transcription.podcast <rss-url> [episode_index]", file=sys.stderr)
         sys.exit(2)
     rss = sys.argv[1]
     idx = int(sys.argv[2]) if len(sys.argv) >= 3 else 0

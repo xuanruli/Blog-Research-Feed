@@ -188,7 +188,7 @@ from `brf/config.py`.
 - **Podcast transcription cost** — Whisper large at ~$0.006/min × 60min × 2
   episodes/day = ~$0.72/day, ~$22/mo. Cap enforced by the system prompt's
   "max 2 podcasts/day" budget; no hard limit in code.
-- **Broken feeds** — 12 dead URLs hardcoded in `brf/rss.py SKIP_FEEDS` (see
+- **Broken feeds** — 12 dead URLs hardcoded in `brf/fetchers/rss_compat.py SKIP_FEEDS` (see
   `SOURCES_HEALTH.md` §1). Eventually replace upstream in `sources.opml`.
 - **First-run env build cost** — `pip install git+...` in environment is
   cached but the first session creation has 30s-2min container build

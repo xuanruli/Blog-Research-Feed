@@ -3,7 +3,7 @@
 See BRF_FETCHER_DESIGN.md §3.4 ("RssFetcher", "Why RSS variants stay inside
 RssFetcher"). Responsible for:
 
-* Concurrent (10 workers) httpx fetch of every enabled feed in ``sources.yaml``.
+* Concurrent (10 workers) httpx fetch of every enabled feed in ``feeds.yaml``.
 * Per-entry 3-branch normalize -> ``FeedItem`` (FULL / SUMMARY / TITLE-ONLY).
 * Pre-fetched-body storage: when an entry carries ``content:encoded``
   (RSS) or ``<content>`` (Atom), write the raw HTML to
@@ -44,7 +44,7 @@ FALLBACK_MAX_ITEMS_PER_FEED = 10
 # Firecrawl fallback config (ported from legacy brf/rss.py).
 #
 # Superseded by FirecrawlIndexFetcher (Phase 4). The three feeds keyed
-# here are already `enabled: false` in sources.yaml — their coverage
+# here are already `enabled: false` in feeds.yaml — their coverage
 # moved to the `firecrawl_index:` block. This dict is dormant in
 # production and kept only until a follow-up cleanup PR removes the
 # fallback lane + its tests outright.
@@ -125,13 +125,13 @@ class RssFetcher(FeedFetcher):
     ):
         """Initialize.
 
-        ``feeds`` shape (from ``sources.yaml`` ``rss:`` block)::
+        ``feeds`` shape (from ``feeds.yaml`` ``rss:`` block)::
 
             [{name: str, url: str, enabled: bool = True,
               summary_only: bool = False}, ...]
 
         Disabled feeds (``enabled=false``) are silently skipped per the
-        sources.yaml convention. ``summary_only: true`` forces
+        feeds.yaml convention. ``summary_only: true`` forces
         ``needs_firecrawl=True`` on emitted items even when the
         description is substantive (≥80 chars).
 
@@ -248,7 +248,7 @@ class RssFetcher(FeedFetcher):
         TODO Phase 4: move this to FirecrawlIndexFetcher per design §12.
         """
         try:
-            from brf.firecrawl_client import scrape as fc_scrape
+            from brf.clients.firecrawl import scrape as fc_scrape
         except Exception as exc:
             print(
                 f"[rss] firecrawl unavailable, dropping fallback {feed_meta['url']}: {exc}",
@@ -323,7 +323,7 @@ class RssFetcher(FeedFetcher):
         Returns ``None`` (and logs to stderr) on any failure; never raises.
         """
         try:
-            from brf.firecrawl_client import scrape as fc_scrape
+            from brf.clients.firecrawl import scrape as fc_scrape
         except Exception as exc:
             print(
                 f"[rss] firecrawl unavailable for {item.url}: {exc}",

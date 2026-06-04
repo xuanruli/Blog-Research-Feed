@@ -144,7 +144,7 @@ def test_fetch_firecrawl_import_fails(monkeypatch, capsys):
     real_import = builtins.__import__
 
     def fake_import(name, *args, **kwargs):
-        if name == "brf.firecrawl_client":
+        if name == "brf.clients.firecrawl":
             raise ImportError("firecrawl missing")
         return real_import(name, *args, **kwargs)
 
@@ -173,7 +173,9 @@ def test_fetch_happy_path_extracts_articles(monkeypatch):
     def fake_scrape(url):
         return {"markdown": ANTHROPIC_MD, "metadata": {}}
 
-    monkeypatch.setattr("brf.firecrawl_client.scrape", fake_scrape, raising=False)
+    monkeypatch.setattr(
+        "brf.clients.firecrawl.scrape", fake_scrape, raising=False
+    )
     f = FirecrawlIndexFetcher([_entry()])
     items = list(f.fetch(datetime(2026, 1, 1, tzinfo=timezone.utc)))
     # 2 unique news URLs (research filtered out by regex, duplicate dropped)
@@ -203,7 +205,7 @@ HF_MD = """
 def test_fetch_yymm_date_filter(monkeypatch):
     """`since` cutoff drops papers published before the threshold."""
     monkeypatch.setattr(
-        "brf.firecrawl_client.scrape",
+        "brf.clients.firecrawl.scrape",
         lambda url: {"markdown": HF_MD, "metadata": {}},
         raising=False,
     )
@@ -231,17 +233,15 @@ def test_fetch_scrape_error_isolated(monkeypatch, capsys):
             raise RuntimeError("boom")
         return {"markdown": "[OpenAI thing](https://openai.com/index/cool-post)", "metadata": {}}
 
-    monkeypatch.setattr("brf.firecrawl_client.scrape", scrape, raising=False)
-    f = FirecrawlIndexFetcher(
-        [
-            _entry(),
-            _entry(
-                name="OpenAI News",
-                url="https://openai.com/news",
-                article_url_regex=r"https?://openai\.com/(?:index/)?[a-z0-9-]+",
-            ),
-        ]
-    )
+    monkeypatch.setattr("brf.clients.firecrawl.scrape", scrape, raising=False)
+    f = FirecrawlIndexFetcher([
+        _entry(),
+        _entry(
+            name="OpenAI News",
+            url="https://openai.com/news",
+            article_url_regex=r"https?://openai\.com/(?:index/)?[a-z0-9-]+",
+        ),
+    ])
     items = list(f.fetch(datetime(2026, 1, 1, tzinfo=timezone.utc)))
     assert len(items) == 1
     assert items[0].source == "OpenAI News"
@@ -252,7 +252,7 @@ def test_fetch_slug_blocklist(monkeypatch):
     """Blocklisted slugs are skipped even when they match the regex."""
     md = "[Privacy](https://www.anthropic.com/news/privacy-policy)\n[Real](https://www.anthropic.com/news/claude-4-7)"
     monkeypatch.setattr(
-        "brf.firecrawl_client.scrape",
+        "brf.clients.firecrawl.scrape",
         lambda url: {"markdown": md, "metadata": {}},
         raising=False,
     )
@@ -266,7 +266,7 @@ def test_fetch_max_items_cap(monkeypatch):
     """Per-index emission caps at MAX_ITEMS_PER_INDEX (25)."""
     md = "\n".join(f"[post {i}](https://www.anthropic.com/news/post-{i})" for i in range(40))
     monkeypatch.setattr(
-        "brf.firecrawl_client.scrape",
+        "brf.clients.firecrawl.scrape",
         lambda url: {"markdown": md, "metadata": {}},
         raising=False,
     )
@@ -279,7 +279,7 @@ def test_fetch_title_fallback_when_link_text_is_url(monkeypatch):
     """If the markdown link text is just the URL, derive a title from the slug."""
     md = "[https://www.anthropic.com/news/claude-4-7](https://www.anthropic.com/news/claude-4-7)"
     monkeypatch.setattr(
-        "brf.firecrawl_client.scrape",
+        "brf.clients.firecrawl.scrape",
         lambda url: {"markdown": md, "metadata": {}},
         raising=False,
     )
@@ -295,7 +295,7 @@ def test_fetch_strips_url_fragment_before_dedupe(monkeypatch):
         "[1](https://huggingface.co/papers/2401.12345#community)"
     )
     monkeypatch.setattr(
-        "brf.firecrawl_client.scrape",
+        "brf.clients.firecrawl.scrape",
         lambda url: {"markdown": md, "metadata": {}},
         raising=False,
     )
@@ -312,7 +312,7 @@ def test_fetch_strips_url_fragment_before_dedupe(monkeypatch):
 
 def test_fetch_empty_markdown(monkeypatch):
     monkeypatch.setattr(
-        "brf.firecrawl_client.scrape",
+        "brf.clients.firecrawl.scrape",
         lambda url: {"markdown": "", "metadata": {}},
         raising=False,
     )
@@ -323,7 +323,7 @@ def test_fetch_empty_markdown(monkeypatch):
 def test_fetch_naive_since_normalized(monkeypatch):
     """A naive ``since`` datetime is coerced to UTC, no crash."""
     monkeypatch.setattr(
-        "brf.firecrawl_client.scrape",
+        "brf.clients.firecrawl.scrape",
         lambda url: {"markdown": ANTHROPIC_MD, "metadata": {}},
         raising=False,
     )
@@ -353,7 +353,7 @@ def test_fetch_full_returns_markdown_bytes(monkeypatch):
         extra={"index_url": "https://www.anthropic.com/news"},
     )
     monkeypatch.setattr(
-        "brf.firecrawl_client.scrape",
+        "brf.clients.firecrawl.scrape",
         lambda url: {"markdown": "# Claude 4.7\n\nbody", "metadata": {}},
         raising=False,
     )
@@ -378,7 +378,7 @@ def test_fetch_full_empty_returns_none(monkeypatch):
         extra={},
     )
     monkeypatch.setattr(
-        "brf.firecrawl_client.scrape",
+        "brf.clients.firecrawl.scrape",
         lambda url: {"markdown": "", "metadata": {}},
         raising=False,
     )
@@ -405,7 +405,7 @@ def test_fetch_full_scrape_error_returns_none(monkeypatch, capsys):
     def fail(url):
         raise RuntimeError("nope")
 
-    monkeypatch.setattr("brf.firecrawl_client.scrape", fail, raising=False)
+    monkeypatch.setattr("brf.clients.firecrawl.scrape", fail, raising=False)
     f = FirecrawlIndexFetcher([_entry()])
     assert f.fetch_full(item) is None
     assert "fetch_full failed" in capsys.readouterr().err

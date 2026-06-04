@@ -83,7 +83,7 @@ class FirecrawlIndexFetcher(SourceFetcher):
     def __init__(self, entries: list[dict]):
         """Initialize.
 
-        ``entries`` shape (from ``sources.yaml`` ``firecrawl_index:`` block)::
+        ``entries`` shape (from ``feeds.yaml`` ``firecrawl_index:`` block)::
 
             [{name: str, url: str,
               article_url_regex: str,
@@ -141,7 +141,7 @@ class FirecrawlIndexFetcher(SourceFetcher):
             return []
 
         try:
-            from brf.firecrawl_client import scrape as fc_scrape
+            from brf.clients.firecrawl import scrape as fc_scrape
         except Exception as exc:
             print(
                 f"[firecrawl_index] firecrawl unavailable, skipping all "
@@ -257,7 +257,7 @@ class FirecrawlIndexFetcher(SourceFetcher):
         Returns ``None`` (logged to stderr) on any failure; never raises.
         """
         try:
-            from brf.firecrawl_client import scrape as fc_scrape
+            from brf.clients.firecrawl import scrape as fc_scrape
         except Exception as exc:
             print(
                 f"[firecrawl_index] firecrawl unavailable for {item.url}: {exc}",

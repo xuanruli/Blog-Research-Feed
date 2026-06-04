@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 
 import httpx
 
-from .config import get_env
+from ..config import get_env
 
 _BASE = "https://api.twitter.com/2"
 _TIMEOUT = 10.0

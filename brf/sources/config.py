@@ -1,4 +1,4 @@
-"""Loader for ``brf/sources.yaml`` — the single source of truth for sources.
+"""Loader for ``brf/sources/feeds.yaml`` — the single source of truth for sources.
 
 Replaces the per-type Python constants in ``brf/rss.py`` (``SKIP_FEEDS``,
 ``SUMMARY_ONLY_FEEDS``, ``FIRECRAWL_FALLBACK_FEEDS``) and consolidates the
@@ -30,18 +30,18 @@ _REQUIRED_KEYS: tuple[str, ...] = (
 
 
 def _default_yaml_path() -> Path:
-    """Resolve ``brf/sources.yaml`` inside the installed package.
+    """Resolve ``brf/sources/feeds.yaml`` inside the installed package.
 
     Uses :mod:`importlib.resources` so this works both in editable installs
     and in a zip-installed wheel.
     """
     from importlib.resources import files
 
-    return Path(str(files("brf") / "sources.yaml"))
+    return Path(str(files("brf.sources") / "feeds.yaml"))
 
 
 def load_sources(path: Path | None = None) -> dict[str, Any]:
-    """Parse ``sources.yaml`` and return the dict.
+    """Parse ``feeds.yaml`` and return the dict.
 
     Validates that all top-level keys (``rss``, ``x``, ``youtube``,
     ``podcasts``, ``firecrawl_index``) are present. Empty lists/dicts are

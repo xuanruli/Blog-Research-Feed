@@ -235,7 +235,7 @@ def test_fetch_full_returns_bytes_when_transcript_present():
         "transcript_source": "captions",
         "status": "ok",
     }
-    with patch("brf.youtube.get_transcript", return_value=fake):
+    with patch("brf.transcription.youtube.get_transcript", return_value=fake):
         out = f.fetch_full(item)
     assert out == b"hello transcript text"
 
@@ -244,7 +244,7 @@ def test_fetch_full_returns_none_when_transcript_none():
     f = YouTubeFetcher(channels=[])
     item = _make_item()
     fake = {"transcript": None, "transcript_source": None, "status": "error"}
-    with patch("brf.youtube.get_transcript", return_value=fake):
+    with patch("brf.transcription.youtube.get_transcript", return_value=fake):
         out = f.fetch_full(item)
     assert out is None
 
@@ -252,6 +252,6 @@ def test_fetch_full_returns_none_when_transcript_none():
 def test_fetch_full_swallows_exceptions():
     f = YouTubeFetcher(channels=[])
     item = _make_item()
-    with patch("brf.youtube.get_transcript", side_effect=RuntimeError("boom")):
+    with patch("brf.transcription.youtube.get_transcript", side_effect=RuntimeError("boom")):
         out = f.fetch_full(item)
     assert out is None
