@@ -59,13 +59,8 @@ FILES_BETAS = ["managed-agents-2026-04-01", "files-api-2025-04-14"]
 
 MEMORY_STORE_NAME = os.environ.get("MEMORY_STORE_NAME", "Resource_Insight")
 MEMORY_STORE_INSTRUCTIONS = (
-    "Persistent source-quality memory. Each entry records whether a given "
-    "source (RSS feed, author, X handle, podcast, YouTube channel) tends to "
-    "produce high-signal items or low-value noise. READ this before triaging "
-    "today's /tmp/feed/index.json so you can prioritize known-good sources and "
-    "deprioritize known-trash ones. After delivering the Slack report, UPDATE "
-    "it with what today's run revealed about source quality (new good/trash "
-    "sources, or corrections to prior judgments)."
+    "Read before triaging today's items to prioritize known-good sources; "
+    "after sending the report, record new good/trash source judgments."
 )
 
 # Path to the project root (where agent/*.yaml lives) — repo root.
