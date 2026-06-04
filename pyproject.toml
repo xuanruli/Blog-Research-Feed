@@ -28,7 +28,7 @@ brf = "brf.main:cli"
 include = ["brf*", "cron*"]
 
 [tool.setuptools.package-data]
-brf = ["sources.opml", "sources.yaml"]
+"brf.sources" = ["*.yaml", "*.opml"]
 
 [tool.ruff]
 target-version = "py310"

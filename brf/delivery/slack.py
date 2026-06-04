@@ -8,7 +8,7 @@ from typing import Optional
 
 import httpx
 
-from .config import get_env
+from ..config import get_env
 
 _TIMEOUT_SECONDS = 15.0
 
@@ -198,7 +198,7 @@ def markdown_to_blocks(markdown_text: str, max_section_chars: int = 2900) -> lis
 
 
 # ---------------------------------------------------------------------------
-# CLI entry: python -m brf.slack "test message"
+# CLI entry: python -m brf.delivery.slack "test message"
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":  # pragma: no cover
     msg = sys.argv[1] if len(sys.argv) > 1 else "test message"

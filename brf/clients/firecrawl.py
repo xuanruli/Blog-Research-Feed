@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .config import get_env
+from ..config import get_env
 
 
 def _get(obj: Any, key: str, default: Any = None) -> Any:
@@ -113,7 +113,7 @@ def _main(argv: list[str]) -> None:
     import sys
 
     if len(argv) < 2:
-        print("usage: python -m brf.firecrawl_client {scrape URL | search QUERY [LIMIT]}", file=sys.stderr)
+        print("usage: python -m brf.clients.firecrawl {scrape URL | search QUERY [LIMIT]}", file=sys.stderr)
         sys.exit(2)
     cmd = argv[1]
     if cmd == "scrape":

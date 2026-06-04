@@ -1,22 +1,4 @@
-"""FeedFetcher — shared scaffolding for HTTP-feed-backed fetchers.
-
-``RssFetcher``, ``YouTubeFetcher`` and ``PodcastFetcher`` all do the same
-bulk dance: fan out a list of feed URLs across a thread pool, HTTP-GET each,
-parse RSS/Atom, drop entries older than ``since``, and normalize the rest to
-``FeedItem``. That scaffolding lives here once; subclasses supply only the
-parts that actually differ.
-
-Subclass contract:
-
-* ``log_prefix``                   — stderr tag, e.g. ``"[rss]"``.
-* ``max_workers`` (instance attr)  — pool size.
-* ``_feed_units() -> [(url, meta)]`` — the per-worker fetch list.
-* ``_normalize(entry, meta, source_title) -> FeedItem | None`` — one parsed
-  entry to a FeedItem (or ``None`` to drop it).
-
-Subclasses MAY override ``_source_title(meta, parsed, url)`` when the display
-name shouldn't fall back to the raw feed URL (YouTube uses the channel id).
-"""
+"""Shared scaffolding for HTTP-feed-backed fetchers (pool + GET + parse + filter)."""
 from __future__ import annotations
 
 import sys
@@ -47,11 +29,7 @@ def as_aware(dt: Optional[datetime]) -> Optional[datetime]:
 
 
 def passes_since(published_iso: Optional[str], since: Optional[datetime]) -> bool:
-    """True if the entry is new enough to keep.
-
-    Keeps the entry when there's no filter, no date to compare, or the
-    date is unparseable (we'd rather over-include than silently drop).
-    """
+    """True if new enough to keep; missing/unparseable dates are kept, not dropped."""
     if since is None or not published_iso:
         return True
     try:
@@ -61,10 +39,7 @@ def passes_since(published_iso: Optional[str], since: Optional[datetime]) -> boo
 
 
 def http_get_feed(url: str, timeout_secs: int = DEFAULT_TIMEOUT_SECS) -> bytes:
-    """GET ``url`` with the shared polite-client headers; return raw bytes.
-
-    Raises on HTTP error or transport failure — callers isolate that.
-    """
+    """GET ``url`` with shared polite-client headers; return bytes, raise on failure."""
     r = httpx.get(
         url,
         timeout=timeout_secs,
@@ -101,11 +76,7 @@ class FeedFetcher(SourceFetcher):
     # -- shared bulk fetch ---------------------------------------------------
 
     def fetch(self, since: datetime) -> Iterable[FeedItem]:
-        """Concurrent fetch across all feed units; never raises.
-
-        Per-unit failures are logged to stderr and skipped — one bad feed
-        doesn't sink the run.
-        """
+        """Concurrent fetch across all feed units; per-unit failures logged and skipped."""
         units = self._feed_units()
         if not units:
             return []

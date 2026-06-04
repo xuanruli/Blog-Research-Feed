@@ -36,8 +36,8 @@ class PodcastFetcher(FeedFetcher):
     def __init__(self, feeds: list[dict], max_workers: int = 10):
         """Initialize.
 
-        ``feeds`` shape (from ``sources.yaml`` ``podcasts:`` block, typically
-        filtered through :func:`brf.sources_config.active_podcast_feeds`)::
+        ``feeds`` shape (from ``feeds.yaml`` ``podcasts:`` block, typically
+        filtered through :func:`brf.sources.config.active_podcast_feeds`)::
 
             [{name: str, url: str, enabled: bool = True,
               reason: str = ""}, ...]
@@ -104,9 +104,9 @@ class PodcastFetcher(FeedFetcher):
 
         try:
             # Late import: keeps stdlib-only test paths free of heavy deps,
-            # and lets tests patch these names on the brf.podcast module.
-            from brf import podcast as _podcast_mod
+            # and lets tests patch these names on the brf.transcription.podcast module.
             from brf.config import get_env
+            from brf.transcription import podcast as _podcast_mod
         except Exception as exc:
             print(f"[podcast] dependency import failed: {exc}", file=sys.stderr)
             return None

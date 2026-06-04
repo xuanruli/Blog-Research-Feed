@@ -6,7 +6,7 @@
 - **FULL** = `content:encoded` 或长 `description`，RSS 直接用即可
 - **SUMMARY** = 仅 title / 短摘要 → **NEEDS_FIRECRAWL** 抓正文
 - **BROKEN** = 404 / 死链 / 返回 HTML → 需替换 URL
-- **FIRECRAWL_FALLBACK** = RSS 坏但站点活，`brf/rss.py` 走 Firecrawl 抓 index 页提条目
+- **FIRECRAWL_FALLBACK** = RSS 坏但站点活，`brf/fetchers/rss_compat.py` 走 Firecrawl 抓 index 页提条目
 - **NEEDS_X_API** = X-only 账号，无 feed
 
 ---
@@ -31,7 +31,7 @@
 
 ## 1.5 RSS 坏但站点活 → FIRECRAWL_FALLBACK_FEEDS（共 3 条）
 
-`brf/rss.py` 对这三条 Firecrawl 抓 `html_url` 然后正则提条目。$0.005/scrape × 3 × 30 = ~$0.45/月。
+`brf/fetchers/rss_compat.py` 对这三条 Firecrawl 抓 `html_url` 然后正则提条目。$0.005/scrape × 3 × 30 = ~$0.45/月。
 
 | Feed | RSS 故障 | Fallback html_url | Article URL pattern | Date |
 |---|---|---|---|---|

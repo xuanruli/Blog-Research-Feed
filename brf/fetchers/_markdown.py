@@ -1,9 +1,4 @@
-"""Markdown link helpers shared by the firecrawl-backed fetchers.
-
-Both ``rss`` (firecrawl-fallback lane) and ``firecrawl_index`` pull article
-links out of firecrawl-returned markdown and derive slugs from URLs. This is
-the single home for that logic.
-"""
+"""Markdown link + slug helpers shared by the firecrawl-backed fetchers."""
 from __future__ import annotations
 
 import re

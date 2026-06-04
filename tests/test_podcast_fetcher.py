@@ -262,8 +262,8 @@ def test_fetch_full_success(tmp_path):
     def fake_transcribe(path, api_key):
         return "hello world transcript", "ok", None
 
-    with patch("brf.podcast._download_audio", side_effect=fake_download), \
-         patch("brf.podcast._transcribe_whisper", side_effect=fake_transcribe), \
+    with patch("brf.transcription.podcast._download_audio", side_effect=fake_download), \
+         patch("brf.transcription.podcast._transcribe_whisper", side_effect=fake_transcribe), \
          patch("brf.config.get_env", return_value="sk-test"):
         result = f.fetch_full(item)
 
@@ -274,9 +274,9 @@ def test_fetch_full_download_failure_returns_none(capsys):
     item = _item_with("https://cdn.example.com/ep.mp3")
     f = PodcastFetcher(feeds=[])
 
-    with patch("brf.podcast._download_audio",
+    with patch("brf.transcription.podcast._download_audio",
                return_value=(False, "download_failed", "http 404")), \
-         patch("brf.podcast._transcribe_whisper") as tx, \
+         patch("brf.transcription.podcast._transcribe_whisper") as tx, \
          patch("brf.config.get_env", return_value="sk-test"):
         assert f.fetch_full(item) is None
         tx.assert_not_called()
@@ -299,8 +299,8 @@ def test_fetch_full_whisper_failure_returns_none():
             fh.write(b"x")
         return True, None, None
 
-    with patch("brf.podcast._download_audio", side_effect=fake_download), \
-         patch("brf.podcast._transcribe_whisper",
+    with patch("brf.transcription.podcast._download_audio", side_effect=fake_download), \
+         patch("brf.transcription.podcast._transcribe_whisper",
                return_value=(None, "transcription_failed", "http 500")), \
          patch("brf.config.get_env", return_value="sk-test"):
         assert f.fetch_full(item) is None

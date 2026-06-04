@@ -165,8 +165,11 @@ brf firecrawl search --query <q> --limit 10
 | `brf/` | CLI bundle, installed into the session container |
 | `brf/main.py` | Click entry: `fetch-all` / `fetch-full` are the main flow |
 | `brf/aggregator.py`, `brf/fetchers/` | Parallel fetch + dedupe + scheduling |
-| `brf/sources.yaml` | Single source of truth for all feeds / handles / channels |
-| `brf/firecrawl_client.py`, `slack.py`, `rss.py`, `x_client.py`, `youtube.py`, `podcast.py` | Per-service clients |
+| `brf/sources/` | Source catalog: `feeds.yaml` / `feeds.opml` + loader (`config.py`) |
+| `brf/transcription/` | Whisper core + YouTube / podcast transcribers |
+| `brf/clients/` | External API clients (`firecrawl.py`, `x.py`) |
+| `brf/delivery/` | Report delivery (`slack.py`) |
+| `brf/feed_item.py`, `config.py`, `io.py` | Shared schema + env/IO primitives |
 | `agent/agent.yaml`, `reader.yaml`, `reviewer.yaml` | Managed Agent definitions (lookup by name) |
 | `agent/*_prompt.md` | System prompts for coordinator / reader / reviewer |
 | `cron/daily.py` | Host-side runner: resolves agent/env by name, opens a session, streams events |
