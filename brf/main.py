@@ -1,22 +1,4 @@
-"""brf — CLI bundle for the Blog Research Feed Managed Agent.
-
-This package is a pure **tool CLI** used by the agent inside its Managed
-Agents container via bash. It knows nothing about Managed Agents, sessions,
-or the Anthropic SDK — it just fetches things and emits JSON.
-
-Two invocation contexts:
-
-* Inside the agent's session container: ``brf fetch rss --since … | jq …``.
-  The CLI auto-loads secrets from ``/workspace/.env`` (mounted by the
-  cron runner at session-create time) via ``brf.config``.
-* Locally, for smoke-testing without going through the agent loop. Set the
-  same env vars in your shell or a local ``.env``.
-
-The cron-side cron runner that creates the Managed Agent session and
-manages the SSE event stream lives in the separate ``cron``
-package (``python -m cron.daily``). The two are intentionally
-decoupled — ``brf`` does not import from ``cron`` and vice versa.
-"""
+"""The ``brf`` CLI: fetch sources, drill down, and report — emits JSON to stdout."""
 
 from __future__ import annotations
 
@@ -31,9 +13,6 @@ def cli() -> None:
     """Blog Research Feed CLI."""
 
 
-# ---------------------------------------------------------------------------
-# fetch
-# ---------------------------------------------------------------------------
 @cli.group()
 def fetch() -> None:
     """Fetch source content (RSS, X, YouTube, podcasts)."""
@@ -110,9 +89,6 @@ def fetch_podcast_transcript(url, episode_index):
     emit_json(podcast.get_transcript(url, episode_index=episode_index))
 
 
-# ---------------------------------------------------------------------------
-# firecrawl
-# ---------------------------------------------------------------------------
 @cli.group()
 def firecrawl() -> None:
     """Firecrawl-backed scrape/search."""
@@ -147,9 +123,6 @@ def firecrawl_search(query, limit):
     emit_json(results)
 
 
-# ---------------------------------------------------------------------------
-# report
-# ---------------------------------------------------------------------------
 @cli.group()
 def report() -> None:
     """Reporting / delivery commands."""
@@ -186,17 +159,8 @@ def report_slack(webhook_env, message_file):
     emit_json(result)
 
 
-# ---------------------------------------------------------------------------
-# fetch-all / fetch-full — unified entry points (Phase 1 scaffolding;
-# behavior wired up in Phase 2+).
-# See BRF_FETCHER_DESIGN.md §4.
-# ---------------------------------------------------------------------------
 def _build_aggregator(output_dir):
-    """Construct the FeedAggregator with all registered fetchers.
-
-    Phase 2: RssFetcher registered. Phase 3+ adds XFetcher / YouTubeFetcher
-    / PodcastFetcher / FirecrawlIndexFetcher one at a time.
-    """
+    """Construct the FeedAggregator with all five source fetchers registered."""
     from pathlib import Path
 
     from .aggregator import FeedAggregator
@@ -234,10 +198,7 @@ def _build_aggregator(output_dir):
     help="Directory to write index.json + full/<id>.* into.",
 )
 def fetch_all(since, output_dir):
-    """Bulk-fetch all configured sources, write unified index.json.
-
-    Phase 1: writes an empty list. Phase 2+: actual fetcher fan-out.
-    """
+    """Bulk-fetch all configured sources, write unified index.json."""
     agg = _build_aggregator(output_dir)
     items = agg.fetch_all(since)
     click.echo(f"{len(items)} items written to {output_dir}/index.json", err=True)

@@ -143,8 +143,7 @@ def test_title_only_branch_needs_firecrawl(output_dir: Path):
 
 
 def test_summary_only_flag_forces_needs_firecrawl(output_dir: Path):
-    """A feed marked summary_only=True forces needs_firecrawl even with
-    a substantive description."""
+    """``summary_only=True`` forces needs_firecrawl even with a substantive description."""
     desc = (
         "This is a substantive description, well over eighty characters long indeed and then some."
     )

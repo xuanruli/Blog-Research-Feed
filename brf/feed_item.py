@@ -1,7 +1,4 @@
-"""Normalized FeedItem schema shared across all source fetchers.
-
-See BRF_FETCHER_DESIGN.md §3.2 / §3.2.1 / §10 Q5.
-"""
+"""The normalized FeedItem schema shared across all source fetchers."""
 
 from __future__ import annotations
 
@@ -17,7 +14,7 @@ SCHEMA_VERSION = "0.1"
 
 
 def make_id(source_type: str, url: str) -> str:
-    """Stable 16-char id derived from source_type+url. See §3.2.1."""
+    """Stable 16-char id derived from source_type + url."""
     return hashlib.sha1(f"{source_type}:{url}".encode()).hexdigest()[:16]
 
 
@@ -49,8 +46,6 @@ class FeedItem:
             )
         return cls(**d)
 
-
-# --- Shared utility helpers ---------------------------------------------------
 
 _SCRIPT_RE = re.compile(r"<(script|style)\b[^>]*>.*?</\1>", re.DOTALL | re.IGNORECASE)
 _TAG_RE = re.compile(r"<[^>]+>")

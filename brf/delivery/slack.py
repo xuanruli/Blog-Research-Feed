@@ -14,9 +14,6 @@ from ..config import get_env
 _TIMEOUT_SECONDS = 15.0
 
 
-# ---------------------------------------------------------------------------
-# Markdown → Slack mrkdwn
-# ---------------------------------------------------------------------------
 def _markdown_to_mrkdwn(text: str) -> str:
     """Convert a subset of CommonMark to Slack mrkdwn."""
     # Links: [label](url) → <url|label>. Do this before bold so URLs aren't molested.
@@ -30,9 +27,6 @@ def _markdown_to_mrkdwn(text: str) -> str:
     return text
 
 
-# ---------------------------------------------------------------------------
-# Webhook POST helpers
-# ---------------------------------------------------------------------------
 def _resolve_webhook(webhook_url: Optional[str], webhook_env: str) -> Optional[str]:
     if webhook_url:
         return webhook_url
@@ -67,12 +61,7 @@ def post_message(
     webhook_url: Optional[str] = None,
     webhook_env: str = "SLACK_WEBHOOK_URL",
 ) -> dict:
-    """Posts a message to Slack via incoming webhook.
-
-    text: Markdown-style content (will be converted to Slack mrkdwn).
-
-    Returns {ok: bool, status_code: int, ts: str | None, error: str | None}.
-    """
+    """Post a markdown message to Slack; returns ``{ok, status_code, ts, error}``."""
     mrkdwn = _markdown_to_mrkdwn(text)
     return _post({"text": mrkdwn}, webhook_url, webhook_env)
 
@@ -86,9 +75,6 @@ def post_blocks(
     return _post({"blocks": blocks}, webhook_url, webhook_env)
 
 
-# ---------------------------------------------------------------------------
-# Markdown → Block Kit
-# ---------------------------------------------------------------------------
 _HEADING_RE = re.compile(r"(?m)^(#{1,2})\s+(.+)$")
 
 
@@ -142,10 +128,7 @@ def _hard_split(text: str, max_chars: int) -> list[str]:
 
 
 def markdown_to_blocks(markdown_text: str, max_section_chars: int = 2900) -> list[dict]:
-    """Convert markdown text to Slack Block Kit blocks.
-    Splits on H1/H2 boundaries. Each section becomes a section block with mrkdwn.
-    Slack mrkdwn rules: **bold** → *bold*, no _underscore_ italic abuse, links as <url|label>.
-    """
+    """Convert markdown to Slack Block Kit blocks, split on H1/H2 boundaries."""
     sections = _split_on_headings(markdown_text)
     blocks: list[dict] = []
 
@@ -196,9 +179,6 @@ def markdown_to_blocks(markdown_text: str, max_section_chars: int = 2900) -> lis
     return blocks
 
 
-# ---------------------------------------------------------------------------
-# CLI entry: python -m brf.delivery.slack "test message"
-# ---------------------------------------------------------------------------
 if __name__ == "__main__":  # pragma: no cover
     msg = sys.argv[1] if len(sys.argv) > 1 else "test message"
     import json as _json

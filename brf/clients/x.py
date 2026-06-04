@@ -1,9 +1,4 @@
-"""X (Twitter) API v2 client for fetching recent user posts.
-
-Handles the common error modes — including HTTP 402 CreditsDepleted, since
-the dev account this ships with has zero credits — by returning a structured
-status field rather than raising.
-"""
+"""X (Twitter) API v2 client; returns a structured status dict instead of raising."""
 
 from __future__ import annotations
 
@@ -33,10 +28,7 @@ def fetch_user_recent(
     since: datetime | None = None,
     max_results: int = 20,
 ) -> dict:
-    """Fetch recent original tweets from an X user.
-
-    Returns a dict with keys: handle, posts, status, error_message.
-    """
+    """Fetch recent original tweets; returns ``{handle, posts, status, error_message}``."""
     handle = handle.lstrip("@")
     result: dict = {
         "handle": handle,
@@ -66,7 +58,6 @@ def fetch_user_recent(
 
     try:
         with httpx.Client(timeout=_TIMEOUT, headers=headers) as client:
-            # 1. Resolve handle -> user id
             r = client.get(f"{_BASE}/users/by/username/{handle}")
             if r.status_code != 200:
                 result["status"] = _status_for(r.status_code)
@@ -79,7 +70,6 @@ def fetch_user_recent(
                 return result
             user_id = data["id"]
 
-            # 2. Fetch tweets
             params = {
                 "max_results": max(5, min(int(max_results), 100)),
                 "tweet.fields": "created_at,public_metrics",

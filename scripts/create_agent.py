@@ -1,25 +1,5 @@
 #!/usr/bin/env python3
-"""Provision the Blog-Research-Feed managed agent roster.
-
-Source of truth:
-    agent/agent.yaml       — coordinator (curator). May declare a
-                              `multiagent` block with subagent name refs.
-    agent/reader.yaml      — reader subagent (long-form summarizer)
-    agent/reviewer.yaml    — reviewer subagent (report QA)
-    agent/environment.yaml — environment config (pip / apt / networking)
-    agent/*_prompt.md      — system prompts referenced via `@./...` in the
-                              yamls.
-
-Provisioning order:
-    1. environment
-    2. subagents (reader, reviewer) — must exist before coordinator can
-       reference them by id
-    3. coordinator — `multiagent.agents` name refs resolved to ids here
-
-Usage:
-    python scripts/create_agent.py            # create new (idempotent)
-    python scripts/create_agent.py --update   # update existing by name
-"""
+"""Provision the managed-agent roster (env, reader, reviewer, then coordinator) from agent/*.yaml."""
 
 from __future__ import annotations
 
@@ -38,8 +18,7 @@ AGENT_YAML_PATH = AGENT_DIR / "agent.yaml"
 ENV_YAML_PATH = AGENT_DIR / "environment.yaml"
 SYSTEM_PROMPT_PATH = AGENT_DIR / "system_prompt.md"
 
-# Subagent yaml paths. Order matters: subagents must be provisioned before
-# the coordinator can reference them by id in its `multiagent.agents`.
+# Subagents must be provisioned before the coordinator references them by id.
 SUBAGENT_YAML_PATHS: list[Path] = [
     AGENT_DIR / "reader.yaml",
     AGENT_DIR / "reviewer.yaml",
@@ -112,12 +91,7 @@ def _resolve_multiagent(
     raw: dict[str, Any] | None,
     name_to_id: dict[str, str],
 ) -> dict[str, Any] | None:
-    """Resolve `{type: agent, name: X}` entries to `{type: agent, id: ...}`.
-
-    The yaml file references subagents by their human-readable name so
-    that the same file works no matter what the auto-generated ids are
-    on a given Anthropic account. This function does the substitution.
-    """
+    """Resolve ``{type: agent, name}`` roster entries to ``{type: agent, id}``."""
     if not raw:
         return None
     out: dict[str, Any] = {"type": raw.get("type", "coordinator"), "agents": []}
@@ -125,7 +99,6 @@ def _resolve_multiagent(
         if entry.get("type") != "agent":
             out["agents"].append(entry)
             continue
-        # Already an id-based ref → keep verbatim.
         if "id" in entry:
             out["agents"].append(entry)
             continue
