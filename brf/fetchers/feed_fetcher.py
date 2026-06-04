@@ -17,6 +17,7 @@ Subclass contract:
 Subclasses MAY override ``_source_title(meta, parsed, url)`` when the display
 name shouldn't fall back to the raw feed URL (YouTube uses the channel id).
 """
+
 from __future__ import annotations
 
 import sys
@@ -88,9 +89,7 @@ class FeedFetcher(SourceFetcher):
         """Return the ``[(feed_url, meta), ...]`` to fetch in parallel."""
         raise NotImplementedError
 
-    def _normalize(
-        self, entry: dict, meta: dict, source_title: str
-    ) -> Optional[FeedItem]:
+    def _normalize(self, entry: dict, meta: dict, source_title: str) -> Optional[FeedItem]:
         """Turn one parsed feed entry into a FeedItem (or ``None`` to drop)."""
         raise NotImplementedError
 
@@ -115,8 +114,7 @@ class FeedFetcher(SourceFetcher):
         all_items: list[FeedItem] = []
         with ThreadPoolExecutor(max_workers=workers) as pool:
             futures = {
-                pool.submit(self._fetch_unit, url, meta, since_cmp): url
-                for url, meta in units
+                pool.submit(self._fetch_unit, url, meta, since_cmp): url for url, meta in units
             }
             for fut in as_completed(futures):
                 url = futures[fut]
@@ -129,9 +127,7 @@ class FeedFetcher(SourceFetcher):
                     )
         return all_items
 
-    def _fetch_unit(
-        self, url: str, meta: dict, since_cmp: Optional[datetime]
-    ) -> list[FeedItem]:
+    def _fetch_unit(self, url: str, meta: dict, since_cmp: Optional[datetime]) -> list[FeedItem]:
         """Fetch + parse one feed, since-filter, normalize entries."""
         try:
             content = http_get_feed(url, self.timeout_secs)

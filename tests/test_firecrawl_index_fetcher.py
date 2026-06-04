@@ -1,4 +1,5 @@
 """Tests for brf.fetchers.firecrawl_index.FirecrawlIndexFetcher."""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -14,6 +15,7 @@ from brf.fetchers.firecrawl_index import (
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _entry(**overrides) -> dict:
     base = {
@@ -31,34 +33,41 @@ def _entry(**overrides) -> dict:
 # ABC compliance + init
 # ---------------------------------------------------------------------------
 
+
 def test_subclass_of_source_fetcher():
     assert issubclass(FirecrawlIndexFetcher, SourceFetcher)
     assert FirecrawlIndexFetcher.source_type == "firecrawl_index"
 
 
 def test_init_filters_disabled_entries():
-    f = FirecrawlIndexFetcher([
-        _entry(),
-        _entry(name="Disabled", enabled=False),
-    ])
+    f = FirecrawlIndexFetcher(
+        [
+            _entry(),
+            _entry(name="Disabled", enabled=False),
+        ]
+    )
     assert len(f._entries) == 1
     assert f._entries[0]["name"] == "Anthropic News"
 
 
 def test_init_skips_bad_regex(capsys):
-    f = FirecrawlIndexFetcher([
-        _entry(),
-        _entry(name="Bad", article_url_regex=r"["),
-    ])
+    f = FirecrawlIndexFetcher(
+        [
+            _entry(),
+            _entry(name="Bad", article_url_regex=r"["),
+        ]
+    )
     captured = capsys.readouterr()
     assert "bad regex" in captured.err
     assert len(f._entries) == 1
 
 
 def test_init_skips_missing_regex(capsys):
-    f = FirecrawlIndexFetcher([
-        _entry(name="NoRegex", article_url_regex=None),
-    ])
+    f = FirecrawlIndexFetcher(
+        [
+            _entry(name="NoRegex", article_url_regex=None),
+        ]
+    )
     captured = capsys.readouterr()
     assert "missing article_url_regex" in captured.err
     assert f._entries == []
@@ -67,6 +76,7 @@ def test_init_skips_missing_regex(capsys):
 # ---------------------------------------------------------------------------
 # Date parser
 # ---------------------------------------------------------------------------
+
 
 def test_parse_index_date_strptime_ok():
     dt = _parse_index_date("2026-05-20", "%Y-%m-%d")
@@ -106,6 +116,7 @@ def test_parse_index_date_yymm_too_short():
 # Slug helpers
 # ---------------------------------------------------------------------------
 
+
 def test_url_slug_basic():
     assert _url_slug("https://example.com/news/some-post/") == "some-post"
     assert _url_slug("https://example.com/news/some-post?ref=x") == "some-post"
@@ -118,6 +129,7 @@ def test_slug_to_title_fallback():
 # ---------------------------------------------------------------------------
 # fetch() — empty / firecrawl-unavailable
 # ---------------------------------------------------------------------------
+
 
 def test_fetch_empty_entries():
     f = FirecrawlIndexFetcher([])
@@ -161,9 +173,7 @@ def test_fetch_happy_path_extracts_articles(monkeypatch):
     def fake_scrape(url):
         return {"markdown": ANTHROPIC_MD, "metadata": {}}
 
-    monkeypatch.setattr(
-        "brf.firecrawl_client.scrape", fake_scrape, raising=False
-    )
+    monkeypatch.setattr("brf.firecrawl_client.scrape", fake_scrape, raising=False)
     f = FirecrawlIndexFetcher([_entry()])
     items = list(f.fetch(datetime(2026, 1, 1, tzinfo=timezone.utc)))
     # 2 unique news URLs (research filtered out by regex, duplicate dropped)
@@ -215,20 +225,23 @@ def test_fetch_yymm_date_filter(monkeypatch):
 
 def test_fetch_scrape_error_isolated(monkeypatch, capsys):
     """One bad index page must not abort the whole run."""
+
     def scrape(url):
         if "anthropic" in url:
             raise RuntimeError("boom")
         return {"markdown": "[OpenAI thing](https://openai.com/index/cool-post)", "metadata": {}}
 
     monkeypatch.setattr("brf.firecrawl_client.scrape", scrape, raising=False)
-    f = FirecrawlIndexFetcher([
-        _entry(),
-        _entry(
-            name="OpenAI News",
-            url="https://openai.com/news",
-            article_url_regex=r"https?://openai\.com/(?:index/)?[a-z0-9-]+",
-        ),
-    ])
+    f = FirecrawlIndexFetcher(
+        [
+            _entry(),
+            _entry(
+                name="OpenAI News",
+                url="https://openai.com/news",
+                article_url_regex=r"https?://openai\.com/(?:index/)?[a-z0-9-]+",
+            ),
+        ]
+    )
     items = list(f.fetch(datetime(2026, 1, 1, tzinfo=timezone.utc)))
     assert len(items) == 1
     assert items[0].source == "OpenAI News"
@@ -251,9 +264,7 @@ def test_fetch_slug_blocklist(monkeypatch):
 
 def test_fetch_max_items_cap(monkeypatch):
     """Per-index emission caps at MAX_ITEMS_PER_INDEX (25)."""
-    md = "\n".join(
-        f"[post {i}](https://www.anthropic.com/news/post-{i})" for i in range(40)
-    )
+    md = "\n".join(f"[post {i}](https://www.anthropic.com/news/post-{i})" for i in range(40))
     monkeypatch.setattr(
         "brf.firecrawl_client.scrape",
         lambda url: {"markdown": md, "metadata": {}},
@@ -325,6 +336,7 @@ def test_fetch_naive_since_normalized(monkeypatch):
 # fetch_full()
 # ---------------------------------------------------------------------------
 
+
 def test_fetch_full_returns_markdown_bytes(monkeypatch):
     from brf.feed_item import FeedItem, make_id
 
@@ -354,9 +366,16 @@ def test_fetch_full_empty_returns_none(monkeypatch):
     from brf.feed_item import FeedItem
 
     item = FeedItem(
-        id="x", source_type="firecrawl_index", source="x", title="x",
-        url="https://example.com/x", published=None, summary="",
-        has_full=False, needs_firecrawl=True, extra={},
+        id="x",
+        source_type="firecrawl_index",
+        source="x",
+        title="x",
+        url="https://example.com/x",
+        published=None,
+        summary="",
+        has_full=False,
+        needs_firecrawl=True,
+        extra={},
     )
     monkeypatch.setattr(
         "brf.firecrawl_client.scrape",
@@ -371,9 +390,16 @@ def test_fetch_full_scrape_error_returns_none(monkeypatch, capsys):
     from brf.feed_item import FeedItem
 
     item = FeedItem(
-        id="x", source_type="firecrawl_index", source="x", title="x",
-        url="https://example.com/x", published=None, summary="",
-        has_full=False, needs_firecrawl=True, extra={},
+        id="x",
+        source_type="firecrawl_index",
+        source="x",
+        title="x",
+        url="https://example.com/x",
+        published=None,
+        summary="",
+        has_full=False,
+        needs_firecrawl=True,
+        extra={},
     )
 
     def fail(url):

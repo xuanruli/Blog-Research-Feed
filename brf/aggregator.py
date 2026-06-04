@@ -10,6 +10,7 @@ Output layout under ``output_dir``:
 
 See :doc:`/BRF_FETCHER_DESIGN.md` §3.5 for the design rationale.
 """
+
 from __future__ import annotations
 
 import json
@@ -48,10 +49,10 @@ _DEDUPE_PRIORITY: dict[str, int] = {
 
 # Extension per source_type for the per-item body file under full/.
 _FULL_EXT: dict[str, str] = {
-    "rss": "html",            # content:encoded HTML or scraped article markdown
-    "youtube": "txt",         # transcript text
-    "podcast": "txt",         # Whisper transcript text
-    "x": "txt",               # rarely used (tweet already in summary)
+    "rss": "html",  # content:encoded HTML or scraped article markdown
+    "youtube": "txt",  # transcript text
+    "podcast": "txt",  # Whisper transcript text
+    "x": "txt",  # rarely used (tweet already in summary)
     "firecrawl_index": "md",  # firecrawl returns markdown
 }
 
@@ -99,8 +100,7 @@ class FeedAggregator:
         all_items: list[FeedItem] = []
         with ThreadPoolExecutor(max_workers=len(self.fetchers)) as pool:
             futures = {
-                pool.submit(self._fetch_one_safe, f, since): f.source_type
-                for f in self.fetchers
+                pool.submit(self._fetch_one_safe, f, since): f.source_type for f in self.fetchers
             }
             for fut in as_completed(futures):
                 all_items.extend(fut.result())
@@ -182,8 +182,7 @@ class FeedAggregator:
             content = fetcher.fetch_full(item)
         except Exception as exc:  # noqa: BLE001
             print(
-                f"[aggregator] fetch_full for {item.id} ({item.source_type}) "
-                f"crashed: {exc}",
+                f"[aggregator] fetch_full for {item.id} ({item.source_type}) crashed: {exc}",
                 file=sys.stderr,
             )
             return None

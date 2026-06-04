@@ -2,6 +2,7 @@
 
 Network is fully mocked via monkeypatching ``brf.fetchers.x.fetch_user_recent``.
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -70,12 +71,18 @@ def test_is_subclass_of_sourcefetcher():
 
 
 def test_single_handle_two_tweets(monkeypatch):
-    _patch(monkeypatch, {
-        "karpathy": _ok("karpathy", [
-            _post(tid="100", handle="karpathy", text="first tweet", likes=50),
-            _post(tid="101", handle="karpathy", text="second tweet", likes=7),
-        ])
-    })
+    _patch(
+        monkeypatch,
+        {
+            "karpathy": _ok(
+                "karpathy",
+                [
+                    _post(tid="100", handle="karpathy", text="first tweet", likes=50),
+                    _post(tid="101", handle="karpathy", text="second tweet", likes=7),
+                ],
+            )
+        },
+    )
     items = list(XFetcher(["karpathy"]).fetch(SINCE))
     assert len(items) == 2
     for it in items:
@@ -92,14 +99,20 @@ def test_single_handle_two_tweets(monkeypatch):
 
 
 def test_multiple_handles_merged(monkeypatch):
-    _patch(monkeypatch, {
-        "karpathy": _ok("karpathy", [_post(tid="1", handle="karpathy", text="k1")]),
-        "simonw": _ok("simonw", [
-            _post(tid="2", handle="simonw", text="s1"),
-            _post(tid="3", handle="simonw", text="s2"),
-        ]),
-        "natolambert": _ok("natolambert", [_post(tid="4", handle="natolambert", text="n1")]),
-    })
+    _patch(
+        monkeypatch,
+        {
+            "karpathy": _ok("karpathy", [_post(tid="1", handle="karpathy", text="k1")]),
+            "simonw": _ok(
+                "simonw",
+                [
+                    _post(tid="2", handle="simonw", text="s1"),
+                    _post(tid="3", handle="simonw", text="s2"),
+                ],
+            ),
+            "natolambert": _ok("natolambert", [_post(tid="4", handle="natolambert", text="n1")]),
+        },
+    )
     items = list(XFetcher(["karpathy", "simonw", "natolambert"]).fetch(SINCE))
     assert len(items) == 4
     sources = {it.source for it in items}
@@ -107,58 +120,93 @@ def test_multiple_handles_merged(monkeypatch):
 
 
 def test_no_credits_skipped(monkeypatch):
-    _patch(monkeypatch, {
-        "karpathy": _ok("karpathy", [_post(tid="1", handle="karpathy")]),
-        "broke": {"handle": "broke", "posts": [],
-                  "status": "no_credits", "error_message": "HTTP 402"},
-    })
+    _patch(
+        monkeypatch,
+        {
+            "karpathy": _ok("karpathy", [_post(tid="1", handle="karpathy")]),
+            "broke": {
+                "handle": "broke",
+                "posts": [],
+                "status": "no_credits",
+                "error_message": "HTTP 402",
+            },
+        },
+    )
     items = list(XFetcher(["karpathy", "broke"]).fetch(SINCE))
     assert len(items) == 1
     assert items[0].source == "@karpathy"
 
 
 def test_user_not_found_skipped(monkeypatch):
-    _patch(monkeypatch, {
-        "karpathy": _ok("karpathy", [_post(tid="1", handle="karpathy")]),
-        "ghost": {"handle": "ghost", "posts": [],
-                  "status": "user_not_found", "error_message": "no such user"},
-    })
+    _patch(
+        monkeypatch,
+        {
+            "karpathy": _ok("karpathy", [_post(tid="1", handle="karpathy")]),
+            "ghost": {
+                "handle": "ghost",
+                "posts": [],
+                "status": "user_not_found",
+                "error_message": "no such user",
+            },
+        },
+    )
     items = list(XFetcher(["karpathy", "ghost"]).fetch(SINCE))
     assert len(items) == 1
     assert items[0].source == "@karpathy"
 
 
 def test_thread_emoji_marks_has_thread(monkeypatch):
-    _patch(monkeypatch, {
-        "k": _ok("k", [_post(tid="1", handle="k", text="big announcement 🧵")]),
-    })
+    _patch(
+        monkeypatch,
+        {
+            "k": _ok("k", [_post(tid="1", handle="k", text="big announcement 🧵")]),
+        },
+    )
     items = list(XFetcher(["k"]).fetch(SINCE))
     assert items[0].extra["has_thread"] is True
 
 
 def test_long_tweet_marks_is_long(monkeypatch):
     long_text = "x" * 270
-    _patch(monkeypatch, {
-        "k": _ok("k", [_post(tid="1", handle="k", text=long_text)]),
-    })
+    _patch(
+        monkeypatch,
+        {
+            "k": _ok("k", [_post(tid="1", handle="k", text=long_text)]),
+        },
+    )
     items = list(XFetcher(["k"]).fetch(SINCE))
     assert items[0].extra["is_long"] is True
     # Short tweet -> is_long False
-    _patch(monkeypatch, {
-        "k": _ok("k", [_post(tid="2", handle="k", text="short")]),
-    })
+    _patch(
+        monkeypatch,
+        {
+            "k": _ok("k", [_post(tid="2", handle="k", text="short")]),
+        },
+    )
     items = list(XFetcher(["k"]).fetch(SINCE))
     assert items[0].extra["is_long"] is False
 
 
 def test_make_id_deterministic_for_same_url(monkeypatch):
     url = "https://x.com/karpathy/status/12345"
-    _patch(monkeypatch, {
-        "karpathy": _ok("karpathy", [
-            {"id": "12345", "text": "hi", "created_at": "2026-05-19T12:00:00Z",
-             "url": url, "like_count": 1, "retweet_count": 0},
-        ])
-    })
+    _patch(
+        monkeypatch,
+        {
+            "karpathy": _ok(
+                "karpathy",
+                [
+                    {
+                        "id": "12345",
+                        "text": "hi",
+                        "created_at": "2026-05-19T12:00:00Z",
+                        "url": url,
+                        "like_count": 1,
+                        "retweet_count": 0,
+                    },
+                ],
+            )
+        },
+    )
     items = list(XFetcher(["karpathy"]).fetch(SINCE))
     assert items[0].id == make_id("x", url)
     # Re-fetch -> same id
@@ -168,6 +216,7 @@ def test_make_id_deterministic_for_same_url(monkeypatch):
 
 def test_fetch_full_returns_none(monkeypatch):
     from brf.feed_item import FeedItem
+
     item = FeedItem(
         id="abc",
         source_type="x",

@@ -4,6 +4,7 @@ Both ``rss`` (firecrawl-fallback lane) and ``firecrawl_index`` pull article
 links out of firecrawl-returned markdown and derive slugs from URLs. This is
 the single home for that logic.
 """
+
 from __future__ import annotations
 
 import re

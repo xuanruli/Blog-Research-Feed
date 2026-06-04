@@ -4,6 +4,7 @@ Handles the common error modes — including HTTP 402 CreditsDepleted, since
 the dev account this ships with has zero credits — by returning a structured
 status field rather than raising.
 """
+
 from __future__ import annotations
 
 import sys
@@ -88,7 +89,9 @@ def fetch_user_recent(
             r2 = client.get(f"{_BASE}/users/{user_id}/tweets", params=params)
             if r2.status_code != 200:
                 result["status"] = _status_for(r2.status_code)
-                result["error_message"] = f"users/{{id}}/tweets HTTP {r2.status_code}: {r2.text[:300]}"
+                result["error_message"] = (
+                    f"users/{{id}}/tweets HTTP {r2.status_code}: {r2.text[:300]}"
+                )
                 return result
 
             body = r2.json()

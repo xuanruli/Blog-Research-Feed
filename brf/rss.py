@@ -6,6 +6,7 @@ list via ``jq``). All real parsing/fetching now lives in
 ``brf/fetchers/rss.py`` (see BRF_FETCHER_DESIGN.md §7 Phase 2). Fully
 eliminating this module is a deferred Phase 2 task (§12).
 """
+
 from __future__ import annotations
 
 import os
@@ -56,11 +57,13 @@ def _parse_opml(opml_path: Path) -> list[dict]:
         xml_url = outline.get("xmlUrl")
         if not xml_url:
             continue
-        feeds.append({
-            "name": outline.get("text") or outline.get("title") or xml_url,
-            "url": xml_url,
-            "html_url": outline.get("htmlUrl") or "",
-        })
+        feeds.append(
+            {
+                "name": outline.get("text") or outline.get("title") or xml_url,
+                "url": xml_url,
+                "html_url": outline.get("htmlUrl") or "",
+            }
+        )
     return feeds
 
 
@@ -111,16 +114,18 @@ def fetch_recent(
                     full_text = full_path.read_text(encoding="utf-8")
                 except OSError:
                     full_text = None
-        results.append({
-            "source": item.source,
-            "source_url": item.extra.get("source_url", "") if item.extra else "",
-            "title": item.title,
-            "url": item.url,
-            "published": item.published or "",
-            "summary": item.summary or "",
-            "full_text": full_text,
-            "needs_firecrawl": bool(item.needs_firecrawl),
-        })
+        results.append(
+            {
+                "source": item.source,
+                "source_url": item.extra.get("source_url", "") if item.extra else "",
+                "title": item.title,
+                "url": item.url,
+                "published": item.published or "",
+                "summary": item.summary or "",
+                "full_text": full_text,
+                "needs_firecrawl": bool(item.needs_firecrawl),
+            }
+        )
     return results
 
 

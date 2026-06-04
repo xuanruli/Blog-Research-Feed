@@ -3,6 +3,7 @@
 Parses a podcast RSS feed, downloads the chosen episode's audio, and
 transcribes it via the OpenAI Whisper API (`whisper-1`).
 """
+
 from __future__ import annotations
 
 import datetime as dt
@@ -66,7 +67,9 @@ def _download_audio(url: str, dest_path: str) -> tuple[bool, Optional[str], Opti
         return False, "download_failed", str(e)
 
 
-def _transcribe_whisper(path: str, api_key: str) -> tuple[Optional[str], Optional[str], Optional[str]]:
+def _transcribe_whisper(
+    path: str, api_key: str
+) -> tuple[Optional[str], Optional[str], Optional[str]]:
     """Upload `path` to OpenAI Whisper. Returns (text, status, error_message)."""
     from .transcription import transcribe
 
@@ -112,7 +115,9 @@ def get_transcript(rss_url: str, episode_index: int = 0) -> dict:
 
     if episode_index < 0 or episode_index >= len(entries):
         result["status"] = "no_episodes"
-        result["error_message"] = f"episode_index {episode_index} out of range (have {len(entries)})"
+        result["error_message"] = (
+            f"episode_index {episode_index} out of range (have {len(entries)})"
+        )
         return result
 
     entry = entries[episode_index]
@@ -120,7 +125,8 @@ def get_transcript(rss_url: str, episode_index: int = 0) -> dict:
     pp = entry.get("published_parsed") or entry.get("updated_parsed")
     result["published"] = (
         dt.datetime(*pp[:6], tzinfo=dt.timezone.utc).isoformat()
-        if pp else entry.get("published") or entry.get("updated")
+        if pp
+        else entry.get("published") or entry.get("updated")
     )
 
     audio_url = _pick_enclosure_url(entry)

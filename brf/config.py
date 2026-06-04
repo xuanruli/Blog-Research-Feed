@@ -14,6 +14,7 @@ Auto-loads .env from (in order, first hit wins):
 4. ``./.env`` — current working directory (local dev).
 5. Walking up from this file's directory (handy when running from src).
 """
+
 from __future__ import annotations
 
 import os

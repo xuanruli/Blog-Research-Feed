@@ -14,6 +14,7 @@ See BRF_FETCHER_DESIGN.md §3.4. Responsible for:
 The bulk fetch/parse/since-filter scaffolding lives in
 :class:`brf.fetchers.feed_fetcher.FeedFetcher`.
 """
+
 from __future__ import annotations
 
 import sys
@@ -23,9 +24,7 @@ from brf.feed_item import FeedItem, _strip_html, _truncate, make_id
 
 from .feed_fetcher import SUMMARY_MAX_CHARS, SUMMARY_MIN_CHARS, FeedFetcher
 
-CHANNEL_FEED_URL = (
-    "https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
-)
+CHANNEL_FEED_URL = "https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
 
 
 def _ytdlp_metadata(url: str) -> Optional[dict]:
@@ -78,17 +77,12 @@ class YouTubeFetcher(FeedFetcher):
     # -- FeedFetcher hooks ---------------------------------------------------
 
     def _feed_units(self) -> list[tuple[str, dict]]:
-        return [
-            (CHANNEL_FEED_URL.format(channel_id=ch["channel_id"]), ch)
-            for ch in self.channels
-        ]
+        return [(CHANNEL_FEED_URL.format(channel_id=ch["channel_id"]), ch) for ch in self.channels]
 
     def _source_title(self, meta: dict, parsed: dict, url: str) -> str:
         return meta.get("name") or parsed.get("title") or meta.get("channel_id") or url
 
-    def _normalize(
-        self, entry: dict, meta: dict, source_title: str
-    ) -> Optional[FeedItem]:
+    def _normalize(self, entry: dict, meta: dict, source_title: str) -> Optional[FeedItem]:
         entry_url = entry.get("link") or ""
         if not entry_url:
             return None

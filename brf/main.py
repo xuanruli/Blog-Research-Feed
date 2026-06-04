@@ -17,6 +17,7 @@ manages the SSE event stream lives in the separate ``cron``
 package (``python -m cron.daily``). The two are intentionally
 decoupled — ``brf`` does not import from ``cron`` and vice versa.
 """
+
 from __future__ import annotations
 
 import click
@@ -39,10 +40,18 @@ def fetch() -> None:
 
 
 @fetch.command("rss")
-@click.option("--since", type=click.DateTime(formats=["%Y-%m-%d"]), default=None,
-              help="Only include items published on/after this date (YYYY-MM-DD).")
-@click.option("--opml", type=click.Path(exists=False, dir_okay=False), default=None,
-              help="Path to OPML file listing feeds. Defaults to repo sources.opml.")
+@click.option(
+    "--since",
+    type=click.DateTime(formats=["%Y-%m-%d"]),
+    default=None,
+    help="Only include items published on/after this date (YYYY-MM-DD).",
+)
+@click.option(
+    "--opml",
+    type=click.Path(exists=False, dir_okay=False),
+    default=None,
+    help="Path to OPML file listing feeds. Defaults to repo sources.opml.",
+)
 def fetch_rss(since, opml):
     """Fetch new items from RSS/Atom feeds. Outputs JSON list of items."""
     from pathlib import Path
@@ -59,8 +68,12 @@ def fetch_rss(since, opml):
 
 @fetch.command("x-user")
 @click.option("--handle", type=str, required=True, help="X (Twitter) handle without leading @.")
-@click.option("--since", type=click.DateTime(formats=["%Y-%m-%d"]), default=None,
-              help="Only include posts on/after this date (YYYY-MM-DD).")
+@click.option(
+    "--since",
+    type=click.DateTime(formats=["%Y-%m-%d"]),
+    default=None,
+    help="Only include posts on/after this date (YYYY-MM-DD).",
+)
 def fetch_x_user(handle, since):
     """Fetch recent posts from an X user. Outputs JSON."""
     from .io import emit_json
@@ -82,8 +95,13 @@ def fetch_youtube_transcript(url):
 
 @fetch.command("podcast-transcript")
 @click.option("--url", type=str, required=True, help="Podcast RSS feed URL.")
-@click.option("--episode-index", type=int, default=0, show_default=True,
-              help="Index into the RSS entries list (0 = most recent).")
+@click.option(
+    "--episode-index",
+    type=int,
+    default=0,
+    show_default=True,
+    help="Index into the RSS entries list (0 = most recent).",
+)
 def fetch_podcast_transcript(url, episode_index):
     """Fetch / generate a podcast transcript. Outputs JSON {title, transcript}."""
     from . import podcast
@@ -116,8 +134,7 @@ def firecrawl_scrape(url):
 
 @firecrawl.command("search")
 @click.option("--query", type=str, required=True, help="Search query.")
-@click.option("--limit", type=int, default=10, show_default=True,
-              help="Maximum number of results.")
+@click.option("--limit", type=int, default=10, show_default=True, help="Maximum number of results.")
 def firecrawl_search(query, limit):
     """Search the web via Firecrawl. Outputs JSON."""
     from .firecrawl_client import search
@@ -139,10 +156,19 @@ def report() -> None:
 
 
 @report.command("slack")
-@click.option("--webhook-env", type=str, default="SLACK_WEBHOOK_URL", show_default=True,
-              help="Name of the env var holding the Slack incoming webhook URL.")
-@click.option("--message-file", type=click.Path(exists=False, dir_okay=False), required=True,
-              help="Path to a file containing the Slack message body (markdown).")
+@click.option(
+    "--webhook-env",
+    type=str,
+    default="SLACK_WEBHOOK_URL",
+    show_default=True,
+    help="Name of the env var holding the Slack incoming webhook URL.",
+)
+@click.option(
+    "--message-file",
+    type=click.Path(exists=False, dir_okay=False),
+    required=True,
+    help="Path to a file containing the Slack message body (markdown).",
+)
 def report_slack(webhook_env, message_file):
     """Post a message to Slack via incoming webhook."""
     from pathlib import Path
@@ -194,11 +220,19 @@ def _build_aggregator(output_dir):
 
 
 @cli.command("fetch-all")
-@click.option("--since", type=click.DateTime(formats=["%Y-%m-%d"]), required=True,
-              help="Only include items published on/after this date (YYYY-MM-DD).")
-@click.option("--output-dir", type=click.Path(file_okay=False), default="/tmp/feed",
-              show_default=True,
-              help="Directory to write index.json + full/<id>.* into.")
+@click.option(
+    "--since",
+    type=click.DateTime(formats=["%Y-%m-%d"]),
+    required=True,
+    help="Only include items published on/after this date (YYYY-MM-DD).",
+)
+@click.option(
+    "--output-dir",
+    type=click.Path(file_okay=False),
+    default="/tmp/feed",
+    show_default=True,
+    help="Directory to write index.json + full/<id>.* into.",
+)
 def fetch_all(since, output_dir):
     """Bulk-fetch all configured sources, write unified index.json.
 
@@ -206,18 +240,21 @@ def fetch_all(since, output_dir):
     """
     agg = _build_aggregator(output_dir)
     items = agg.fetch_all(since)
-    click.echo(f"{len(items)} items written to {output_dir}/index.json",
-               err=True)
+    click.echo(f"{len(items)} items written to {output_dir}/index.json", err=True)
 
 
 @cli.command("fetch-full")
-@click.option("--id", "item_id", type=str, required=True,
-              help="FeedItem id (from index.json).")
-@click.option("--output-dir", type=click.Path(file_okay=False), default="/tmp/feed",
-              show_default=True,
-              help="Directory containing index.json + full/.")
-@click.option("--force", is_flag=True, default=False,
-              help="Re-fetch even if the body file already exists.")
+@click.option("--id", "item_id", type=str, required=True, help="FeedItem id (from index.json).")
+@click.option(
+    "--output-dir",
+    type=click.Path(file_okay=False),
+    default="/tmp/feed",
+    show_default=True,
+    help="Directory containing index.json + full/.",
+)
+@click.option(
+    "--force", is_flag=True, default=False, help="Re-fetch even if the body file already exists."
+)
 def fetch_full_cmd(item_id, output_dir, force):
     """Drill-down on one item by id; dispatches by source_type."""
     agg = _build_aggregator(output_dir)

@@ -18,6 +18,7 @@ The pooled fetch/parse/since-filter scaffolding lives in
 3-branch normalize, the pre-fetched-body write, and the firecrawl-fallback
 lane on top.
 """
+
 from __future__ import annotations
 
 import re
@@ -61,9 +62,7 @@ DEFAULT_FIRECRAWL_FALLBACK: dict[str, dict] = {
     },
     "https://jamesg.blog/hf-papers.xml": {
         "html_url": "https://huggingface.co/papers",
-        "article_url_regex": re.compile(
-            r"https?://huggingface\.co/papers/\d{4}\.\d{4,5}"
-        ),
+        "article_url_regex": re.compile(r"https?://huggingface\.co/papers/\d{4}\.\d{4,5}"),
         "date_format": None,
         "date_group": None,
         "source_title": "HF Daily Papers",
@@ -79,12 +78,23 @@ DEFAULT_FIRECRAWL_FALLBACK: dict[str, dict] = {
         "date_format": None,
         "date_group": None,
         "source_title": "LangChain Blog",
-        "slug_blocklist": frozenset({
-            "about-us", "contact-us", "privacy-policy",
-            "terms-of-service", "terms-of-use", "case-studies",
-            "get-started", "sign-up", "sign-in", "log-in", "log-out",
-            "blog-rss", "all-posts",
-        }),
+        "slug_blocklist": frozenset(
+            {
+                "about-us",
+                "contact-us",
+                "privacy-policy",
+                "terms-of-service",
+                "terms-of-use",
+                "case-studies",
+                "get-started",
+                "sign-up",
+                "sign-in",
+                "log-in",
+                "log-out",
+                "blog-rss",
+                "all-posts",
+            }
+        ),
     },
 }
 
@@ -133,11 +143,7 @@ class RssFetcher(FeedFetcher):
         self.full_dir = self.output_dir / "full"
         self.full_dir.mkdir(parents=True, exist_ok=True)
 
-        fallback = (
-            DEFAULT_FIRECRAWL_FALLBACK
-            if firecrawl_fallback is None
-            else firecrawl_fallback
-        )
+        fallback = DEFAULT_FIRECRAWL_FALLBACK if firecrawl_fallback is None else firecrawl_fallback
         self._fallback_norm = {_norm(u): cfg for u, cfg in fallback.items()}
 
         # Split feeds into live (httpx) vs. firecrawl-fallback lanes.
@@ -158,9 +164,7 @@ class RssFetcher(FeedFetcher):
     def _feed_units(self) -> list[tuple[str, dict]]:
         return [(f["url"], f) for f in self._live_feeds]
 
-    def _normalize(
-        self, entry: dict, meta: dict, source_title: str
-    ) -> Optional[FeedItem]:
+    def _normalize(self, entry: dict, meta: dict, source_title: str) -> Optional[FeedItem]:
         """Apply FULL / SUMMARY / TITLE-ONLY branching (design §3.4)."""
         entry_url = entry.get("link") or ""
         if not entry_url:
@@ -223,9 +227,7 @@ class RssFetcher(FeedFetcher):
         since_cmp = as_aware(since)
         for feed_meta, cfg in self._fallback_feeds:
             try:
-                items.extend(
-                    self._fetch_firecrawl_fallback(feed_meta, cfg, since_cmp)
-                )
+                items.extend(self._fetch_firecrawl_fallback(feed_meta, cfg, since_cmp))
             except Exception as exc:
                 print(
                     f"[rss] fallback crashed for {feed_meta['url']}: {exc}",
@@ -294,18 +296,20 @@ class RssFetcher(FeedFetcher):
                         continue
                     published_iso = dt.isoformat()
 
-            items.append(FeedItem(
-                id=make_id("rss", url),
-                source_type="rss",
-                source=source_title,
-                title=title,
-                url=url,
-                published=published_iso,
-                summary="",
-                has_full=False,
-                needs_firecrawl=True,
-                extra={"source_url": html_url},
-            ))
+            items.append(
+                FeedItem(
+                    id=make_id("rss", url),
+                    source_type="rss",
+                    source=source_title,
+                    title=title,
+                    url=url,
+                    published=published_iso,
+                    summary="",
+                    has_full=False,
+                    needs_firecrawl=True,
+                    extra={"source_url": html_url},
+                )
+            )
             if len(items) >= FALLBACK_MAX_ITEMS_PER_FEED:
                 break
 

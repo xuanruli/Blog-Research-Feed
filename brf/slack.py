@@ -1,4 +1,5 @@
 """Slack delivery module — post markdown-style messages to Slack incoming webhooks."""
+
 from __future__ import annotations
 
 import datetime as _dt
@@ -178,9 +179,7 @@ def markdown_to_blocks(markdown_text: str, max_section_chars: int = 2900) -> lis
             chunk = chunk.strip()
             if not chunk:
                 continue
-            blocks.append(
-                {"type": "section", "text": {"type": "mrkdwn", "text": chunk}}
-            )
+            blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": chunk}})
 
     today = _dt.date.today().isoformat()
     blocks.append(

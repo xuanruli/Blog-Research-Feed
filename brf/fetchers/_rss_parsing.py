@@ -14,6 +14,7 @@ Each entry dict: ``{title, link, summary, full_text, published_iso}``.
 ``full_text`` carries the raw ``content:encoded`` (RSS) or ``<content>``
 (Atom) body when present, otherwise ``None``.
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -152,8 +153,7 @@ def _parse_atom_entry(entry) -> dict:
         elif len(content_el) > 0:
             # type="xhtml" — serialize children
             full_text = "".join(
-                ET.tostring(child, encoding="unicode", method="html")
-                for child in content_el
+                ET.tostring(child, encoding="unicode", method="html") for child in content_el
             )
 
     return {
@@ -162,8 +162,7 @@ def _parse_atom_entry(entry) -> dict:
         "summary": _text(entry.find("atom:summary", NS)),
         "full_text": full_text,
         "published_iso": parse_pub_date(
-            _text(entry.find("atom:published", NS))
-            or _text(entry.find("atom:updated", NS))
+            _text(entry.find("atom:published", NS)) or _text(entry.find("atom:updated", NS))
         ),
         "audio_url": None,  # Atom podcasts are rare; no enclosure handling.
         "duration_seconds": None,
@@ -192,9 +191,6 @@ def parse_feed(content: bytes) -> dict:
     if local == "feed":
         return {
             "title": _text(root.find("atom:title", NS)),
-            "entries": [
-                _parse_atom_entry(entry)
-                for entry in root.findall("atom:entry", NS)
-            ],
+            "entries": [_parse_atom_entry(entry) for entry in root.findall("atom:entry", NS)],
         }
     raise ValueError(f"Unknown feed root tag: {local!r}")

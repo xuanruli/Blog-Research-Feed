@@ -4,6 +4,7 @@ Single source of truth for the Whisper endpoint, the 25 MB upload ceiling,
 and the multipart POST. Both transcribers (``brf.youtube`` and
 ``brf.podcast``) delegate here instead of each carrying their own copy.
 """
+
 from __future__ import annotations
 
 import os

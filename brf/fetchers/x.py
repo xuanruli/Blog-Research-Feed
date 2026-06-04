@@ -10,6 +10,7 @@ Tweets are summary-complete (≤280 chars), so:
 * ``fetch_full`` is a no-op (returns ``None``) — there is no extra body to drill into.
   Phase 3.5+ may extend this for thread context.
 """
+
 from __future__ import annotations
 
 import sys
@@ -68,8 +69,7 @@ class XFetcher(SourceFetcher):
 
         with ThreadPoolExecutor(max_workers=self.max_workers) as pool:
             futures = {
-                pool.submit(self._fetch_one, handle, since): handle
-                for handle in self.handles
+                pool.submit(self._fetch_one, handle, since): handle for handle in self.handles
             }
             for fut in as_completed(futures):
                 handle = futures[fut]
@@ -102,8 +102,7 @@ class XFetcher(SourceFetcher):
         status = resp.get("status")
         if status != "ok":
             print(
-                f"[x] skipping @{handle}: status={status} "
-                f"error={resp.get('error_message')!r}",
+                f"[x] skipping @{handle}: status={status} error={resp.get('error_message')!r}",
                 file=sys.stderr,
             )
             return []
@@ -114,23 +113,25 @@ class XFetcher(SourceFetcher):
             url = tweet.get("url") or ""
             if not url:
                 continue
-            out.append(FeedItem(
-                id=make_id("x", url),
-                source_type="x",
-                source=f"@{handle}",
-                title="",  # X has no title
-                url=url,
-                published=tweet.get("created_at") or None,
-                summary=text,
-                has_full=True,           # tweet IS the body
-                needs_firecrawl=False,   # firecrawl useless on X
-                extra={
-                    "like_count": tweet.get("like_count", 0),
-                    "retweet_count": tweet.get("retweet_count", 0),
-                    "has_thread": _is_thread(text),
-                    "is_long": len(text) >= LONG_TWEET_THRESHOLD,
-                },
-            ))
+            out.append(
+                FeedItem(
+                    id=make_id("x", url),
+                    source_type="x",
+                    source=f"@{handle}",
+                    title="",  # X has no title
+                    url=url,
+                    published=tweet.get("created_at") or None,
+                    summary=text,
+                    has_full=True,  # tweet IS the body
+                    needs_firecrawl=False,  # firecrawl useless on X
+                    extra={
+                        "like_count": tweet.get("like_count", 0),
+                        "retweet_count": tweet.get("retweet_count", 0),
+                        "has_thread": _is_thread(text),
+                        "is_long": len(text) >= LONG_TWEET_THRESHOLD,
+                    },
+                )
+            )
         return out
 
     # -- drill-down ----------------------------------------------------------
