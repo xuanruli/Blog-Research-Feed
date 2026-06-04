@@ -1,19 +1,4 @@
-"""Stdlib RSS / Atom parser shared by ``fetchers/rss.py``.
-
-Lifted verbatim from ``brf/rss.py`` so the new fetcher can be developed
-independently of the legacy module's planned consolidation (see
-BRF_FETCHER_DESIGN.md §12 Review #7). Once legacy ``brf/rss.py`` is
-pointed at ``RssFetcher``, it should re-export from here too.
-
-Public surface:
-
-* ``parse_feed(content) -> {title, entries: [...]}``
-* ``parse_pub_date(text) -> str``  (ISO 8601 UTC, "" on failure)
-
-Each entry dict: ``{title, link, summary, full_text, published_iso}``.
-``full_text`` carries the raw ``content:encoded`` (RSS) or ``<content>``
-(Atom) body when present, otherwise ``None``.
-"""
+"""Stdlib RSS 2.0 / Atom 1.0 parser shared by the feed fetchers."""
 
 from __future__ import annotations
 
@@ -22,8 +7,6 @@ from email.utils import parsedate_to_datetime
 from typing import Optional
 from xml.etree import ElementTree as ET
 
-# XML namespaces. RSS 2.0 has no default namespace on its tags;
-# content:encoded uses the content namespace; Atom uses its own.
 NS = {
     "atom": "http://www.w3.org/2005/Atom",
     "content": "http://purl.org/rss/1.0/modules/content/",
@@ -45,11 +28,7 @@ def _text(el) -> str:
 
 
 def parse_duration(raw: str) -> Optional[int]:
-    """Parse an ``itunes:duration`` value into seconds.
-
-    Supports ``"3782"`` (seconds), ``"43:21"`` (MM:SS), ``"1:02:15"``
-    (HH:MM:SS). Returns ``None`` if unparseable.
-    """
+    """Parse an ``itunes:duration`` (seconds, MM:SS, or HH:MM:SS) into seconds."""
     if not raw:
         return None
     raw = raw.strip()
@@ -68,17 +47,13 @@ def parse_duration(raw: str) -> Optional[int]:
             return h * 3600 + m * 60 + s
         return None
     try:
-        return int(float(raw))  # plain seconds, "3782" or "3782.5"
+        return int(float(raw))
     except ValueError:
         return None
 
 
 def _enclosure(item) -> tuple[Optional[str], Optional[int]]:
-    """Pull ``(audio_url, duration_seconds)`` from an RSS ``<item>``.
-
-    Prefers ``<enclosure url=...>``, falls back to ``<media:content>``.
-    Duration comes from ``<itunes:duration>`` when present.
-    """
+    """Pull ``(audio_url, duration_seconds)`` from an RSS ``<item>``."""
     audio_url: Optional[str] = None
     enc = item.find("enclosure")
     if enc is not None:
@@ -151,7 +126,6 @@ def _parse_atom_entry(entry) -> dict:
         if content_el.text:
             full_text = content_el.text
         elif len(content_el) > 0:
-            # type="xhtml" — serialize children
             full_text = "".join(
                 ET.tostring(child, encoding="unicode", method="html") for child in content_el
             )
@@ -164,16 +138,13 @@ def _parse_atom_entry(entry) -> dict:
         "published_iso": parse_pub_date(
             _text(entry.find("atom:published", NS)) or _text(entry.find("atom:updated", NS))
         ),
-        "audio_url": None,  # Atom podcasts are rare; no enclosure handling.
+        "audio_url": None,
         "duration_seconds": None,
     }
 
 
 def parse_feed(content: bytes) -> dict:
-    """Parse RSS 2.0 or Atom 1.0 bytes into ``{title, entries: [...]}``.
-
-    Raises ``ValueError`` on unrecognized root tag or XML parse failure.
-    """
+    """Parse RSS 2.0 or Atom 1.0 bytes into ``{title, entries: [...]}``; raises ValueError."""
     try:
         root = ET.fromstring(content)
     except ET.ParseError as exc:

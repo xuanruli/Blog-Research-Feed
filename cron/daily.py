@@ -1,27 +1,4 @@
-"""Daily cron runner entry point.
-
-Per run:
-
-1. Resolve the .env file to mount.
-   - Preferred: ``ENV_FILE_ID`` env var points at a pre-uploaded Files API
-     object (see ``scripts/upload_env.py``). Nothing is uploaded or deleted.
-   - Fallback: build a ``.env`` payload from host environment
-     (PASSTHROUGH_KEYS), upload via Files API for this run, best-effort
-     delete on clean exit. Kept for local dev / one-off runs.
-2. Create a session referencing the pre-created agent + environment that
-   mounts the .env at ``/workspace/.env``.
-3. Stream events for logs/visibility; exit when the session goes idle with a
-   terminal stop_reason (after seeing at least one running transition) or
-   terminates.
-
-Run via:
-
-    python -m cron.daily            # real run
-    python -m cron.daily --dry-run  # planning only, no API calls
-
-The agent itself drives all the work via the pre-installed ``brf`` CLI in
-bash inside its session container.
-"""
+"""Daily cron runner: mount the .env, create a session, stream it to completion."""
 
 from __future__ import annotations
 
@@ -41,9 +18,7 @@ LOG = logging.getLogger("cron.daily")
 
 HARD_TIMEOUT_SECONDS = 30 * 60
 
-# Keys forwarded into the container .env. Anything else stays host-side.
-# ANTHROPIC_* is intentionally NOT included — the agent shouldn't call back
-# into the API from inside its own session.
+# Keys forwarded into the container .env (ANTHROPIC_* deliberately excluded).
 PASSTHROUGH_KEYS = (
     "FIRECRAWL_API_KEY",
     "X_BEARER_TOKEN",
@@ -52,9 +27,6 @@ PASSTHROUGH_KEYS = (
 )
 
 CONTAINER_ENV_PATH = "/workspace/.env"
-# The SDK auto-sets files-api-2025-04-14 on client.beta.files.*; we also need
-# managed-agents-2026-04-01 because we're using files in a Managed Agents
-# context (per docs/managed_agents/files.md).
 FILES_BETAS = ["managed-agents-2026-04-01", "files-api-2025-04-14"]
 
 MEMORY_STORE_NAME = os.environ.get("MEMORY_STORE_NAME", "Resource_Insight")
@@ -68,16 +40,11 @@ MEMORY_STORE_INSTRUCTIONS = (
     "sources, or corrections to prior judgments)."
 )
 
-# Path to the project root (where agent/*.yaml lives) — repo root.
-# cron/daily.py → project root is parent of parent.
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 AGENT_YAML_PATH = _PROJECT_ROOT / "agent" / "agent.yaml"
 ENV_YAML_PATH = _PROJECT_ROOT / "agent" / "environment.yaml"
 
 
-# ---------------------------------------------------------------------------
-# Env loading (host-side; no dep on brf)
-# ---------------------------------------------------------------------------
 def _get_env(key: str, default: Optional[str] = None, required: bool = False) -> Optional[str]:
     value = os.environ.get(key, default)
     if required and (value is None or value == ""):
@@ -97,9 +64,6 @@ def _setup_logging() -> None:
     logging.Formatter.converter = __import__("time").gmtime
 
 
-# ---------------------------------------------------------------------------
-# Hard timeout
-# ---------------------------------------------------------------------------
 class _Timeout(RuntimeError):
     pass
 
@@ -123,16 +87,8 @@ def _disarm_timeout() -> None:
         pass
 
 
-# ---------------------------------------------------------------------------
-# .env payload
-# ---------------------------------------------------------------------------
 def _build_env_payload(extra: Optional[dict[str, str]] = None) -> bytes:
-    """Render PASSTHROUGH_KEYS (plus optional extras) as KEY=value lines.
-
-    Values are quoted with double-quotes; embedded backslashes/quotes are
-    escaped. Missing keys are skipped (the container side fails loud at use
-    time).
-    """
+    """Render PASSTHROUGH_KEYS (plus extras) as quoted KEY="value" lines."""
     seen: set[str] = set()
     pairs: list[tuple[str, str]] = []
     for key in PASSTHROUGH_KEYS:
@@ -171,13 +127,9 @@ def _try_delete_file(client: Any, file_id: str) -> None:
         LOG.warning("failed to delete env file %s: %s", file_id, exc)
 
 
-# ---------------------------------------------------------------------------
-# Resolve agent + environment by name (look up at runtime instead of
-# requiring users to store the auto-generated IDs as secrets).
-# ---------------------------------------------------------------------------
 def _read_yaml_name(path: Path) -> str:
     """Read the top-level ``name:`` field from a yaml file."""
-    import yaml  # local import — kept off the dry-run-only hot path
+    import yaml
 
     try:
         data = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -192,11 +144,7 @@ def _read_yaml_name(path: Path) -> str:
 
 
 def _find_active_by_name(items: Any, name: str) -> Any:
-    """Pick the unique non-archived item matching ``name`` from an SDK list page.
-
-    Raises if zero matches (caller should provision) or more than one
-    (caller has a stale duplicate to clean up).
-    """
+    """Pick the unique non-archived item named ``name``; raise on zero or many."""
     matches = [
         x
         for x in items
@@ -239,9 +187,6 @@ def _resolve_memory_store_id(client: Any) -> Optional[str]:
     return match.id
 
 
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
 def run(dry_run: bool = False) -> int:
     _setup_logging()
     today = _dt.date.today().isoformat()
@@ -258,7 +203,6 @@ def run(dry_run: bool = False) -> int:
         LOG.info("env payload: %d bytes (will upload per-run)", len(env_payload))
 
     if dry_run:
-        # Read names but don't hit the API.
         plan = {
             "agent_name": _read_yaml_name(AGENT_YAML_PATH),
             "env_name": _read_yaml_name(ENV_YAML_PATH),
@@ -348,7 +292,7 @@ def run(dry_run: bool = False) -> int:
                 _drain(stream, client=client, session_id=session.id)
         except _Timeout as exc:
             LOG.error("hard timeout: %s", exc)
-            delete_after = False  # keep .env file for forensic debug
+            delete_after = False  # keep the .env file for debugging
         finally:
             _disarm_timeout()
     except Exception:
@@ -360,15 +304,7 @@ def run(dry_run: bool = False) -> int:
     return 0
 
 
-# Subagents that the coordinator auto-archives the moment they deliver
-# a result (`agent.thread_message_received`). The semantic is fire-and-
-# forget: coordinator dispatches → reader reads + returns → host frees
-# the thread slot. Coordinator must NOT `send_to_agent` to a reader for
-# follow-up; spawn a fresh one instead (see agent/system_prompt.md).
-#
-# Reviewer is INTENTIONALLY excluded — coordinator may dispatch a 2nd
-# review round on the same thread to re-validate revisions, so the
-# reviewer thread needs to stay live across the session.
+# Fire-and-forget agents whose threads are archived on first idle (reviewer is not).
 _AUTO_ARCHIVE_AGENTS: frozenset[str] = frozenset(
     {
         "blog-research-feed-reader",
@@ -391,37 +327,8 @@ def _archive_thread_safe(client: Any, session_id: str, thread_id: str, agent_nam
 
 
 def _drain(stream: Any, client: Any, session_id: str) -> None:
-    """Consume the SSE stream; auto-archive reader threads on completion.
-
-    Sessions start in ``idle`` (per docs/managed_agents/sessions.md §417), so
-    we must NOT break on the first idle — only after we've seen at least one
-    ``status_running`` transition, which proves the agent actually started
-    working on our kickoff.
-
-    Multiagent thread events (per docs/managed_agents/multi-agent.md §745):
-      session.thread_created           — new subagent thread spawned
-      session.thread_status_running    — subagent started working
-      session.thread_status_idle       — subagent finished a turn
-      agent.thread_message_received    — subagent delivered result to coord
-      agent.thread_message_sent        — coord sent follow-up to subagent
-
-    The 25-concurrent-thread cap (docs §348) is per-session. Without
-    archive, reader threads pile up idle and block the reviewer. We
-    archive each reader thread when it goes idle.
-
-    Archive timing matters: a thread can only be archived from ``idle``
-    status (archiving a ``running`` thread is a 400). ``agent.thread_
-    message_received`` fires while the reader is still finalizing
-    (often still ``running``), so we DON'T archive there — we track
-    reader thread ids from ``session.thread_created`` and archive on
-    the matching ``session.thread_status_idle``, which is the first
-    moment the thread is provably archivable.
-    """
+    """Consume the SSE stream, archiving reader threads as they go idle, until the session ends."""
     has_seen_running = False
-    # thread_id -> agent_name, populated from session.thread_created.
-    # Used to (a) know which idle threads are readers (archive them) vs
-    # the coordinator / reviewer (leave alone), and (b) avoid double
-    # archive attempts.
     reader_threads: set[str] = set()
     for event in stream:
         etype = getattr(event, "type", None)
@@ -440,7 +347,6 @@ def _drain(stream: Any, client: Any, session_id: str) -> None:
                 getattr(b, "text", "") or "" for b in (getattr(event, "content", []) or [])
             )
             LOG.debug("agent.thinking: %s", _truncate(text, 200))
-        # ---- multiagent thread events ----
         elif etype == "session.thread_created":
             agent_name = getattr(event, "agent_name", "?")
             thread_id = getattr(event, "session_thread_id", "?")
@@ -459,11 +365,6 @@ def _drain(stream: Any, client: Any, session_id: str) -> None:
                 thread_id,
                 getattr(getattr(event, "stop_reason", None), "type", None),
             )
-            # A reader is fire-and-forget: the first time it goes idle it
-            # has delivered its result and will get no follow-up, so free
-            # the slot. Only readers (tracked above) — never coordinator
-            # or reviewer. Discard from the set so a later idle (can't
-            # happen for an archived thread, but be defensive) is a no-op.
             if thread_id in reader_threads:
                 reader_threads.discard(thread_id)
                 _archive_thread_safe(client, session_id, thread_id, "blog-research-feed-reader")
@@ -482,11 +383,7 @@ def _drain(stream: Any, client: Any, session_id: str) -> None:
             from_agent = getattr(event, "from_agent_name", "?")
             from_thread = getattr(event, "from_session_thread_id", None)
             LOG.info("thread_msg_received from=%s thread=%s", from_agent, from_thread)
-            # NOTE: do NOT archive here. The thread is often still
-            # ``running`` when its message lands (archive needs ``idle``,
-            # else 400). We archive on the matching
-            # ``session.thread_status_idle`` instead.
-        # ---- session-level status ----
+            # Don't archive here: the thread is often still running; archive on its idle event.
         elif etype == "session.status_running":
             has_seen_running = True
             LOG.info("status_running")

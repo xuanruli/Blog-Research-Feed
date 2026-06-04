@@ -1,15 +1,4 @@
-"""Composer over multiple :class:`SourceFetcher` instances.
-
-Phase 1: skeleton only — no fetcher subclasses are registered yet.
-Phase 2 onwards wires up RssFetcher / XFetcher / YouTubeFetcher /
-PodcastFetcher / FirecrawlIndexFetcher.
-
-Output layout under ``output_dir``:
-    index.json                  — list[FeedItem.to_dict()] (light, agent reads)
-    full/<id>.{html,txt,md,json} — per-item bodies (drilled-down on demand)
-
-See :doc:`/BRF_FETCHER_DESIGN.md` §3.5 for the design rationale.
-"""
+"""Compose multiple SourceFetchers into one bulk fetch + drill-down."""
 
 from __future__ import annotations
 
@@ -23,22 +12,8 @@ from typing import Optional
 from .feed_item import FeedItem
 from .fetchers.base import SourceFetcher
 
-# When the same URL surfaces from multiple fetchers, higher priority
-# (lower number) wins.
-#
-# Priority adjusted from design doc §3.5 after Phase 3 surfaced URL
-# collisions in production:
-# - youtube and podcast now beat rss for URLs they natively own. A
-#   substack URL surfaced by both Latent-Space-blog (rss) and Latent-
-#   Space-podcast (podcast) → podcast wins because the podcast version
-#   carries audio_url for transcript drill-down. A youtube.com URL
-#   referenced from some RSS feed → youtube wins because the YouTube
-#   fetcher has channel_id, duration, and transcript drill-down.
-# - rss still beats x and firecrawl_index because RSS items typically
-#   have published dates and (sometimes) content:encoded bodies that
-#   the lighter sources lack.
-# - firecrawl_index is the weakest (regex-extracted from HTML, no
-#   reliable date) — only used when nothing else covers the source.
+# On a same-URL collision the lower number wins: youtube/podcast own their
+# native URLs (they carry audio/transcript), rss beats the dateless sources.
 _DEDUPE_PRIORITY: dict[str, int] = {
     "youtube": 0,
     "podcast": 1,
@@ -47,34 +22,21 @@ _DEDUPE_PRIORITY: dict[str, int] = {
     "firecrawl_index": 4,
 }
 
-# Extension per source_type for the per-item body file under full/.
 _FULL_EXT: dict[str, str] = {
-    "rss": "html",  # content:encoded HTML or scraped article markdown
-    "youtube": "txt",  # transcript text
-    "podcast": "txt",  # Whisper transcript text
-    "x": "txt",  # rarely used (tweet already in summary)
-    "firecrawl_index": "md",  # firecrawl returns markdown
+    "rss": "html",
+    "youtube": "txt",
+    "podcast": "txt",
+    "x": "txt",
+    "firecrawl_index": "md",
 }
 
 
 class FeedAggregator:
-    """Compose multiple :class:`SourceFetcher` into one bulk operation.
-
-    Skeleton class — `fetch_all` runs whatever fetchers are registered
-    (zero in Phase 1), `fetch_full` dispatches by ``source_type`` to the
-    appropriate registered fetcher. As subsequent phases add fetcher
-    classes, the builder in :func:`brf.main` registers them here.
-
-    Concurrency model (per design doc §3.3): aggregator runs each
-    registered fetcher in its own thread (outer pool). Each fetcher
-    owns its own internal parallelism (inner pool). Aggregator does
-    NOT manage workers inside any one fetcher.
-    """
+    """Run registered fetchers in parallel, dedupe, and dispatch drill-downs."""
 
     def __init__(self, fetchers: list[SourceFetcher], output_dir: Path) -> None:
         self.fetchers = list(fetchers)
         self.by_type: dict[str, SourceFetcher] = {f.source_type: f for f in self.fetchers}
-        # Reject duplicate registrations — exposes config typos early.
         if len(self.by_type) != len(self.fetchers):
             seen = [f.source_type for f in self.fetchers]
             dupes = {st for st in seen if seen.count(st) > 1}
@@ -82,18 +44,9 @@ class FeedAggregator:
         self.output_dir = Path(output_dir)
         (self.output_dir / "full").mkdir(parents=True, exist_ok=True)
 
-    # ------------------------------------------------------------------
-    # Bulk fetch
-    # ------------------------------------------------------------------
     def fetch_all(self, since: datetime) -> list[FeedItem]:
-        """Run all fetchers concurrently, dedupe, write ``index.json``.
-
-        Returns the deduped item list. Per-fetcher failures are logged
-        to stderr and skipped — one bad fetcher doesn't sink the run.
-        """
+        """Run all fetchers concurrently, dedupe, and write ``index.json``."""
         if not self.fetchers:
-            # Phase 1 scaffolding state: write an empty index so consumers
-            # don't crash on file-missing.
             (self.output_dir / "index.json").write_text("[]\n")
             return []
 
@@ -122,7 +75,7 @@ class FeedAggregator:
         """Run one fetcher's `fetch`, swallow exceptions to stderr."""
         try:
             return list(fetcher.fetch(since))
-        except Exception as exc:  # noqa: BLE001 — fetcher failures must not abort the run
+        except Exception as exc:  # noqa: BLE001
             print(
                 f"[aggregator] fetcher {fetcher.source_type!r} crashed: {exc}",
                 file=sys.stderr,
@@ -144,21 +97,8 @@ class FeedAggregator:
                 winner[it.url] = it
         return list(winner.values())
 
-    # ------------------------------------------------------------------
-    # Drill-down
-    # ------------------------------------------------------------------
     def fetch_full(self, item_id: str, force: bool = False) -> Optional[Path]:
-        """Resolve ``item_id`` in ``index.json``, dispatch to the matching
-        fetcher's ``fetch_full``, write the body to ``full/<id>.<ext>``.
-
-        Idempotent by default: if the body file already exists, return its
-        path without re-fetching. Pass ``force=True`` to re-fetch and
-        overwrite.
-
-        Returns the path to the written body, or ``None`` if the item id
-        was not found OR the fetcher returned ``None`` (e.g., transcript
-        unavailable).
-        """
+        """Drill one item down to ``full/<id>.<ext>``; idempotent unless ``force``."""
         item = self._load_item(item_id)
         if item is None:
             return None

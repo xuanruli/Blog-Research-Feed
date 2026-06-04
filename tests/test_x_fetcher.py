@@ -1,7 +1,4 @@
-"""Tests for brf.fetchers.x.XFetcher.
-
-Network is fully mocked via monkeypatching ``brf.fetchers.x.fetch_user_recent``.
-"""
+"""Tests for brf.fetchers.x.XFetcher (network mocked via fetch_user_recent)."""
 
 from __future__ import annotations
 
@@ -44,10 +41,7 @@ def _post(
 
 
 def _patch(monkeypatch, mapping: dict[str, dict]) -> list[str]:
-    """Patch fetch_user_recent to return canned responses keyed by handle.
-
-    Returns a list recording the handles that were queried (for assertions).
-    """
+    """Patch fetch_user_recent with canned responses; return the list of queried handles."""
     calls: list[str] = []
 
     def fake(handle: str, since=None, max_results: int = 20):

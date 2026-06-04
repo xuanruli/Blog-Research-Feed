@@ -1,13 +1,4 @@
-"""YouTube transcript fetcher.
-
-Primary path: youtube-transcript-api against the public caption track.
-Fallback path: yt-dlp downloads bestaudio, then OpenAI Whisper transcribes.
-The fallback is what saves us when YouTube IP-bans the caption endpoint
-(common on cloud egress) or when an uploader disables captions.
-
-Metadata (title / channel / duration) comes from yt-dlp first, oEmbed
-second.
-"""
+"""YouTube transcript: captions via youtube-transcript-api, else yt-dlp + Whisper."""
 
 from __future__ import annotations
 
@@ -23,11 +14,7 @@ import httpx
 
 from ..config import get_env
 
-# Heuristic ceiling on duration we'll bother downloading. bestaudio is
-# typically m4a/webm in the 50–80 kbps range; ~70 min × 80 kbps ≈ 40 MB
-# already exceeds the 25 MB Whisper cap. Use 70 min as the pre-download
-# bailout. Items longer than this get a no_transcript status rather
-# than a wasted yt-dlp transfer.
+# Skip download above this; the audio would blow the 25 MB Whisper cap anyway.
 _WHISPER_MAX_DURATION_SECS = 70 * 60
 
 
@@ -38,7 +25,6 @@ def _parse_video_id(url: str) -> Optional[str]:
     """Extract the 11-character video id from a YouTube URL."""
     if not url:
         return None
-    # Bare id
     if _VIDEO_ID_RE.match(url):
         return url
 
@@ -55,13 +41,11 @@ def _parse_video_id(url: str) -> Optional[str]:
         return vid if _VIDEO_ID_RE.match(vid) else None
 
     if "youtube.com" in host or "youtube-nocookie.com" in host:
-        # /watch?v=ID
         if path == "/watch":
             qs = parse_qs(parsed.query)
             vid = (qs.get("v") or [None])[0]
             if vid and _VIDEO_ID_RE.match(vid):
                 return vid
-        # /shorts/ID, /embed/ID, /v/ID, /live/ID
         for prefix in ("/shorts/", "/embed/", "/v/", "/live/"):
             if path.startswith(prefix):
                 vid = path[len(prefix) :].split("/")[0]
@@ -117,10 +101,7 @@ def _fetch_metadata_oembed(url: str) -> Optional[dict]:
 
 
 def _fetch_transcript(video_id: str) -> tuple[Optional[str], Optional[str], Optional[str]]:
-    """Fetch transcript text. Returns (text, status, error_message).
-
-    Status is one of "ok", "no_transcript", "private_or_deleted", "error".
-    """
+    """Fetch transcript text; returns (text, status, error_message)."""
     try:
         from youtube_transcript_api import YouTubeTranscriptApi  # type: ignore
         from youtube_transcript_api._errors import (  # type: ignore
@@ -131,16 +112,13 @@ def _fetch_transcript(video_id: str) -> tuple[Optional[str], Optional[str], Opti
     except Exception as e:
         return None, "error", f"youtube-transcript-api import failed: {e}"
 
-    # Preferred language order.
     languages = ["en", "en-US", "en-GB", "zh-Hans", "zh-Hant"]
 
     api = YouTubeTranscriptApi()
     try:
         try:
-            # Direct fetch: library handles manual+auto fallback across languages.
             entries = api.fetch(video_id, languages=languages)
         except NoTranscriptFound:
-            # Fall back to listing and translating any translatable transcript.
             tlist = api.list(video_id)
             translated = None
             for t in tlist:
@@ -154,7 +132,6 @@ def _fetch_transcript(video_id: str) -> tuple[Optional[str], Optional[str], Opti
                 return None, "no_transcript", "no transcripts available"
             entries = translated
 
-        # Normalize entries (FetchedTranscriptSnippet or dict).
         lines = []
         for e in entries:
             text = getattr(e, "text", None) if not isinstance(e, dict) else e.get("text")
@@ -183,19 +160,15 @@ def _download_audio_ytdlp(url: str, dest_dir: str) -> tuple[Optional[str], Optio
         "noplaylist": True,
         "format": "bestaudio/best",
         "outtmpl": outtmpl,
-        # Cap download to keep us under the Whisper 25MB ceiling on long videos.
-        # bestaudio is usually m4a/webm; ~50kbps audio = ~25MB for ~70min.
-        "format_sort": ["+size", "+br"],
+        "format_sort": ["+size", "+br"],  # prefer smallest audio for the Whisper cap
     }
     try:
         with YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=True)
         if not info:
             return None, "yt-dlp returned no info"
-        # yt-dlp may have transcoded; locate the resulting file.
         path = ydl.prepare_filename(info)
         if not os.path.exists(path):
-            # Fall back to any file in dest_dir.
             for fname in os.listdir(dest_dir):
                 if fname.startswith("audio."):
                     path = os.path.join(dest_dir, fname)
@@ -218,16 +191,7 @@ def _whisper_fallback(
     url: str,
     duration_seconds: Optional[int] = None,
 ) -> tuple[Optional[str], Optional[str]]:
-    """Download audio with yt-dlp and transcribe with Whisper.
-
-    ``duration_seconds`` is the video length captured earlier (yt-dlp /
-    oEmbed). If it exceeds ``_WHISPER_MAX_DURATION_SECS`` we bail out
-    before the download — at typical bitrates the file would blow the
-    25 MB Whisper limit anyway, so the download bandwidth would just
-    be wasted.
-
-    Returns (text, error_message). Caller handles missing API key upstream.
-    """
+    """Download audio with yt-dlp and Whisper-transcribe it; returns (text, error)."""
     api_key = get_env("OPENAI_API_KEY")
     if not api_key:
         return None, "OPENAI_API_KEY not set"
@@ -244,15 +208,7 @@ def _whisper_fallback(
 
 
 def get_transcript(url: str) -> dict:
-    """Fetch a YouTube video's transcript plus metadata.
-
-    Returns dict with keys: video_id, title, channel, transcript,
-    transcript_source, duration_seconds, status, error_message.
-
-    ``transcript_source`` is ``"captions"`` (youtube-transcript-api) or
-    ``"whisper"`` (yt-dlp + OpenAI Whisper) when a transcript was obtained,
-    else ``None``.
-    """
+    """Fetch a video's transcript plus metadata as a result dict."""
     result: dict = {
         "video_id": None,
         "title": None,
@@ -270,7 +226,6 @@ def get_transcript(url: str) -> dict:
         return result
     result["video_id"] = video_id
 
-    # Metadata: yt-dlp preferred, oembed fallback.
     meta = _fetch_metadata_ytdlp(url) or _fetch_metadata_oembed(url)
     if meta:
         result["title"] = meta.get("title")
@@ -285,8 +240,7 @@ def get_transcript(url: str) -> dict:
         result["error_message"] = None
         return result
 
-    # Captions path failed. yt-dlp can't recover private/deleted videos,
-    # so skip Whisper for those — they'll just fail the same way.
+    # Skip the Whisper fallback for private/deleted videos; yt-dlp can't recover them.
     if status == "private_or_deleted":
         result["status"] = status
         result["error_message"] = err

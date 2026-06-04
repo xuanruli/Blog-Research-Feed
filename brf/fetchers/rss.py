@@ -1,23 +1,4 @@
-"""RssFetcher — Phase 2 of the brf fetcher refactor.
-
-See BRF_FETCHER_DESIGN.md §3.4 ("RssFetcher", "Why RSS variants stay inside
-RssFetcher"). Responsible for:
-
-* Concurrent (10 workers) httpx fetch of every enabled feed in ``feeds.yaml``.
-* Per-entry 3-branch normalize -> ``FeedItem`` (FULL / SUMMARY / TITLE-ONLY).
-* Pre-fetched-body storage: when an entry carries ``content:encoded``
-  (RSS) or ``<content>`` (Atom), write the raw HTML to
-  ``output_dir/full/<id>.html`` so the agent can ``cat`` it without
-  paying for a firecrawl scrape.
-* Firecrawl-fallback lane for the handful of feeds whose RSS is broken
-  but whose HTML index is reachable (jiqizhixin, HF papers, LangChain).
-* ``fetch_full`` drill-down: firecrawl-scrape the item URL on demand.
-
-The pooled fetch/parse/since-filter scaffolding lives in
-:class:`brf.fetchers.feed_fetcher.FeedFetcher`; this module adds the
-3-branch normalize, the pre-fetched-body write, and the firecrawl-fallback
-lane on top.
-"""
+"""RssFetcher: RSS/Atom feeds with a 3-branch normalize and firecrawl-fallback lane."""
 
 from __future__ import annotations
 
@@ -40,15 +21,7 @@ from .feed_fetcher import (
 
 FALLBACK_MAX_ITEMS_PER_FEED = 10
 
-# ---------------------------------------------------------------------------
-# Firecrawl fallback config (ported from legacy brf/rss.py).
-#
-# Superseded by FirecrawlIndexFetcher (Phase 4). The three feeds keyed
-# here are already `enabled: false` in feeds.yaml — their coverage
-# moved to the `firecrawl_index:` block. This dict is dormant in
-# production and kept only until a follow-up cleanup PR removes the
-# fallback lane + its tests outright.
-# ---------------------------------------------------------------------------
+# Dormant: these feeds are disabled in feeds.yaml; FirecrawlIndexFetcher covers them.
 DEFAULT_FIRECRAWL_FALLBACK: dict[str, dict] = {
     "https://www.jiqizhixin.com/rss": {
         "html_url": "https://www.jiqizhixin.com",
@@ -111,7 +84,7 @@ def _parse_fallback_date(raw: str, fmt: str) -> Optional[datetime]:
 
 
 class RssFetcher(FeedFetcher):
-    """Fetcher for RSS/Atom feeds. See module docstring + design §3.4."""
+    """Fetcher for RSS/Atom feeds."""
 
     source_type = "rss"
     log_prefix = "[rss]"
@@ -123,22 +96,7 @@ class RssFetcher(FeedFetcher):
         output_dir: Path,
         firecrawl_fallback: dict | None = None,
     ):
-        """Initialize.
-
-        ``feeds`` shape (from ``feeds.yaml`` ``rss:`` block)::
-
-            [{name: str, url: str, enabled: bool = True,
-              summary_only: bool = False}, ...]
-
-        Disabled feeds (``enabled=false``) are silently skipped per the
-        feeds.yaml convention. ``summary_only: true`` forces
-        ``needs_firecrawl=True`` on emitted items even when the
-        description is substantive (≥80 chars).
-
-        ``firecrawl_fallback`` (optional): override the default mapping
-        of broken-RSS URL -> firecrawl-scrape config. Pass ``None`` to
-        use ``DEFAULT_FIRECRAWL_FALLBACK``; pass ``{}`` to disable.
-        """
+        """Split feeds into live (httpx) and firecrawl-fallback lanes."""
         self.output_dir = Path(output_dir)
         self.full_dir = self.output_dir / "full"
         self.full_dir.mkdir(parents=True, exist_ok=True)
@@ -146,7 +104,6 @@ class RssFetcher(FeedFetcher):
         fallback = DEFAULT_FIRECRAWL_FALLBACK if firecrawl_fallback is None else firecrawl_fallback
         self._fallback_norm = {_norm(u): cfg for u, cfg in fallback.items()}
 
-        # Split feeds into live (httpx) vs. firecrawl-fallback lanes.
         self._live_feeds: list[dict] = []
         self._fallback_feeds: list[tuple[dict, dict]] = []
         for f in feeds:
@@ -159,13 +116,11 @@ class RssFetcher(FeedFetcher):
             else:
                 self._live_feeds.append(f)
 
-    # -- FeedFetcher hooks (live lane) --------------------------------------
-
     def _feed_units(self) -> list[tuple[str, dict]]:
         return [(f["url"], f) for f in self._live_feeds]
 
     def _normalize(self, entry: dict, meta: dict, source_title: str) -> Optional[FeedItem]:
-        """Apply FULL / SUMMARY / TITLE-ONLY branching (design §3.4)."""
+        """Normalize one entry via FULL / SUMMARY / TITLE-ONLY branching."""
         entry_url = entry.get("link") or ""
         if not entry_url:
             return None
@@ -176,7 +131,6 @@ class RssFetcher(FeedFetcher):
         item_id = make_id("rss", entry_url)
 
         if content_encoded:
-            # FULL branch
             plain = _strip_html(content_encoded)
             summary = _truncate(plain, SUMMARY_MAX_CHARS)
             has_full = True
@@ -185,12 +139,10 @@ class RssFetcher(FeedFetcher):
         else:
             stripped_desc = _strip_html(description)
             if description and len(stripped_desc) >= SUMMARY_MIN_CHARS:
-                # SUMMARY branch
                 summary = _truncate(stripped_desc, SUMMARY_MAX_CHARS)
                 has_full = False
                 needs_firecrawl = summary_only_flag
             else:
-                # TITLE-ONLY branch
                 summary = ""
                 has_full = False
                 needs_firecrawl = True
@@ -216,14 +168,11 @@ class RssFetcher(FeedFetcher):
         except OSError as exc:
             print(f"[rss] failed to write {path}: {exc}", file=sys.stderr)
 
-    # -- bulk fetch: live lane (base) + firecrawl-fallback lane -------------
-
     def fetch(self, since: datetime):
         """Run the live lane (pooled) then the sequential firecrawl lane."""
         items = list(super().fetch(since))
 
-        # Firecrawl fallbacks: sequential (firecrawl-py thread safety not
-        # guaranteed, and only ~3 entries here).
+        # Sequential: firecrawl-py thread safety is not guaranteed.
         since_cmp = as_aware(since)
         for feed_meta, cfg in self._fallback_feeds:
             try:
@@ -235,18 +184,13 @@ class RssFetcher(FeedFetcher):
                 )
         return items
 
-    # -- firecrawl fallback (TODO Phase 4: move to FirecrawlIndexFetcher) ---
-
     def _fetch_firecrawl_fallback(
         self,
         feed_meta: dict,
         cfg: dict,
         since_cmp: Optional[datetime],
     ) -> list[FeedItem]:
-        """Scrape ``cfg['html_url']`` via Firecrawl and emit article items.
-
-        TODO Phase 4: move this to FirecrawlIndexFetcher per design §12.
-        """
+        """Scrape ``cfg['html_url']`` via Firecrawl and emit article items."""
         try:
             from brf.clients.firecrawl import scrape as fc_scrape
         except Exception as exc:
@@ -315,13 +259,8 @@ class RssFetcher(FeedFetcher):
 
         return items
 
-    # -- drill-down ----------------------------------------------------------
-
     def fetch_full(self, item: FeedItem) -> bytes | None:
-        """Firecrawl scrape ``item.url``, return markdown as bytes.
-
-        Returns ``None`` (and logs to stderr) on any failure; never raises.
-        """
+        """Firecrawl scrape ``item.url``, return markdown bytes or None on failure."""
         try:
             from brf.clients.firecrawl import scrape as fc_scrape
         except Exception as exc:

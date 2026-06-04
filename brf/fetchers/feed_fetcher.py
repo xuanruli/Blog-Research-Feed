@@ -58,8 +58,6 @@ class FeedFetcher(SourceFetcher):
     timeout_secs: int = DEFAULT_TIMEOUT_SECS
     max_workers: int = DEFAULT_MAX_WORKERS
 
-    # -- subclass hooks ------------------------------------------------------
-
     def _feed_units(self) -> list[tuple[str, dict]]:
         """Return the ``[(feed_url, meta), ...]`` to fetch in parallel."""
         raise NotImplementedError
@@ -71,8 +69,6 @@ class FeedFetcher(SourceFetcher):
     def _source_title(self, meta: dict, parsed: dict, url: str) -> str:
         """Display name for a feed: configured name, else feed title, else URL."""
         return meta.get("name") or parsed.get("title") or url
-
-    # -- shared bulk fetch ---------------------------------------------------
 
     def fetch(self, since: datetime) -> Iterable[FeedItem]:
         """Concurrent fetch across all feed units; per-unit failures logged and skipped."""
