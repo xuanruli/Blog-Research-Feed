@@ -31,13 +31,8 @@ FILES_BETAS = ["managed-agents-2026-04-01", "files-api-2025-04-14"]
 
 MEMORY_STORE_NAME = os.environ.get("MEMORY_STORE_NAME", "Resource_Insight")
 MEMORY_STORE_INSTRUCTIONS = (
-    "Persistent source-quality memory. Each entry records whether a given "
-    "source (RSS feed, author, X handle, podcast, YouTube channel) tends to "
-    "produce high-signal items or low-value noise. READ this before triaging "
-    "today's /tmp/feed/index.json so you can prioritize known-good sources and "
-    "deprioritize known-trash ones. After delivering the Slack report, UPDATE "
-    "it with what today's run revealed about source quality (new good/trash "
-    "sources, or corrections to prior judgments)."
+    "Read before triaging today's items to prioritize known-good sources; "
+    "after sending the report, record new good/trash source judgments."
 )
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -267,12 +262,8 @@ def run(dry_run: bool = False) -> int:
         )
 
         kickoff_text = (
-            f"今天 (UTC) 是 {today}。请处理 {yesterday} 的内容：\n"
-            f"YESTERDAY={yesterday}\n"
-            f"按 system prompt 的 pipeline 执行：先 `brf fetch-all --since {yesterday}`，"
-            f"用 jq triage `/tmp/feed/index.json`，按需 `brf fetch-full --id <id>` "
-            f"drill-down，最后 `brf report slack --message-file <path>`。\n"
-            f"环境变量已经在 {CONTAINER_ENV_PATH}（`brf` 自动加载，不需要手动 source）。"
+            f"今天 (UTC) 是 {today}，请按 system prompt 的 pipeline 处理 {yesterday} 的内容。\n"
+            f"YESTERDAY={yesterday}"
         )
 
         _arm_timeout(HARD_TIMEOUT_SECONDS)
