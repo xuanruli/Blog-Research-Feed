@@ -1,4 +1,4 @@
-name: blog-research-feed-env-v9
+name: blog-research-feed-env-v11
 config:
   type: cloud
 
@@ -12,4 +12,4 @@ config:
     pip:
       - "setuptools<72"
       - "wheel"
-      - "blog-research-feed==0.2.5"
+      - "blog-research-feed==0.2.7"

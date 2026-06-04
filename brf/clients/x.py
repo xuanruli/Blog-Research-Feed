@@ -72,8 +72,10 @@ def fetch_user_recent(
 
             params = {
                 "max_results": max(5, min(int(max_results), 100)),
-                "tweet.fields": "created_at,public_metrics",
-                "exclude": "retweets,replies",
+                "tweet.fields": "created_at,public_metrics,referenced_tweets",
+                "expansions": "referenced_tweets.id,referenced_tweets.id.author_id",
+                "user.fields": "username",
+                "exclude": "replies",
                 "start_time": start_time,
             }
             r2 = client.get(f"{_BASE}/users/{user_id}/tweets", params=params)
@@ -85,17 +87,38 @@ def fetch_user_recent(
                 return result
 
             body = r2.json()
+            includes = body.get("includes", {}) or {}
+            ref_by_id = {rt.get("id"): rt for rt in (includes.get("tweets") or [])}
+            ref_user = {u.get("id"): u.get("username") for u in (includes.get("users") or [])}
+
             for t in body.get("data", []) or []:
                 metrics = t.get("public_metrics", {}) or {}
                 tid = t.get("id")
+                text = t.get("text", "")
+                kind = "original"
+                # The API truncates a raw RT's own text; rebuild it from the referenced tweet.
+                for ref in t.get("referenced_tweets", []) or []:
+                    ref_tweet = ref_by_id.get(ref.get("id"))
+                    if ref_tweet is None:
+                        continue
+                    ref_text = ref_tweet.get("text", "")
+                    ref_author = ref_user.get(ref_tweet.get("author_id"), "")
+                    at = f"@{ref_author}" if ref_author else "someone"
+                    if ref.get("type") == "retweeted":
+                        kind = "retweet"
+                        text = f"RT {at}: {ref_text}"
+                    elif ref.get("type") == "quoted":
+                        kind = "quote"
+                        text = f"{text}\n\n— quoting {at}: {ref_text}"
                 result["posts"].append(
                     {
                         "id": tid,
-                        "text": t.get("text", ""),
+                        "text": text,
                         "created_at": t.get("created_at"),
                         "url": f"https://x.com/{handle}/status/{tid}",
                         "like_count": metrics.get("like_count", 0),
                         "retweet_count": metrics.get("retweet_count", 0),
+                        "kind": kind,
                     }
                 )
             return result

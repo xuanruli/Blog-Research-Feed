@@ -13,7 +13,12 @@ description: >
 tools:
   - type: agent_toolset_20260401
 
-# Subagent IDs are resolved by scripts/create_agent.py at provision time.
+# Skills + subagent IDs resolved by scripts/create_agent.py (run upload_skill.py first).
+skills:
+  - { type: custom, title: brf-cli }
+  - { type: custom, title: slack-formatting }
+
+multiagent:
 multiagent:
   type: coordinator
   agents:
