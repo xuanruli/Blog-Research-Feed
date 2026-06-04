@@ -77,6 +77,60 @@ def scrape(url: str) -> dict:
     return {"markdown": markdown, "metadata": metadata, "status_code": status_code}
 
 
+_INDEX_ARTICLE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "articles": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string"},
+                    "url": {"type": "string"},
+                    "published_date": {"type": "string"},
+                },
+                "required": ["title", "url"],
+            },
+        }
+    },
+}
+_INDEX_PROMPT = (
+    "List every article or blog post linked on this index page. For each, give its "
+    "title, absolute URL, and published date as YYYY-MM-DD if one is shown (omit if none)."
+)
+
+
+def scrape_index(url: str) -> dict:
+    """Scrape an index page; return {articles: [{title, url, published}], markdown}."""
+    app = _client()
+    try:
+        resp = app.scrape(
+            url,
+            formats=[
+                "markdown",
+                {"type": "json", "prompt": _INDEX_PROMPT, "schema": _INDEX_ARTICLE_SCHEMA},
+            ],
+            only_main_content=True,
+        )
+    except Exception as e:
+        raise RuntimeError(f"Firecrawl index scrape failed for {url}: {e}") from e
+
+    data = _get(resp, "data", resp)
+    markdown = _get(data, "markdown") or ""
+    extracted = _get(data, "json") or _get(data, "extract") or {}
+    out_articles: list[dict] = []
+    for a in _get(extracted, "articles") or []:
+        u = _get(a, "url")
+        if not u:
+            continue
+        out_articles.append({
+            "title": (_get(a, "title") or "").strip(),
+            "url": str(u).strip(),
+            "published": _get(a, "published_date") or _get(a, "published"),
+        })
+    return {"articles": out_articles, "markdown": markdown}
+
+
 def search(query: str, limit: int = 10) -> list[dict]:
     """Search the web via Firecrawl. Limit hard-capped at 25."""
     capped = max(1, min(limit, 25))
