@@ -19,7 +19,6 @@ skills:
   - { type: custom, title: slack-formatting }
 
 multiagent:
-multiagent:
   type: coordinator
   agents:
     - { type: agent, name: blog-research-feed-reader }
