@@ -172,7 +172,9 @@ def get_transcript(rss_url: str, episode_index: int = 0) -> dict:
 
 if __name__ == "__main__":  # pragma: no cover
     if len(sys.argv) < 2:
-        print("usage: python -m brf.transcription.podcast <rss-url> [episode_index]", file=sys.stderr)
+        print(
+            "usage: python -m brf.transcription.podcast <rss-url> [episode_index]", file=sys.stderr
+        )
         sys.exit(2)
     rss = sys.argv[1]
     idx = int(sys.argv[2]) if len(sys.argv) >= 3 else 0

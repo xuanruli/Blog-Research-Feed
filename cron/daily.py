@@ -231,7 +231,9 @@ def _resolve_memory_store_id(client: Any) -> Optional[str]:
     try:
         match = _find_active_by_name(client.beta.memory_stores.list(), MEMORY_STORE_NAME)
     except RuntimeError as exc:
-        LOG.warning("memory store %r unavailable (%s) — running without memory", MEMORY_STORE_NAME, exc)
+        LOG.warning(
+            "memory store %r unavailable (%s) — running without memory", MEMORY_STORE_NAME, exc
+        )
         return None
     LOG.info("resolved memory_store.id=%s", match.id)
     return match.id
@@ -298,12 +300,14 @@ def run(dry_run: bool = False) -> int:
         ]
         memory_store_id = _resolve_memory_store_id(client)
         if memory_store_id:
-            resources.append({
-                "type": "memory_store",
-                "memory_store_id": memory_store_id,
-                "access": "read_write",
-                "instructions": MEMORY_STORE_INSTRUCTIONS,
-            })
+            resources.append(
+                {
+                    "type": "memory_store",
+                    "memory_store_id": memory_store_id,
+                    "access": "read_write",
+                    "instructions": MEMORY_STORE_INSTRUCTIONS,
+                }
+            )
 
         LOG.info("creating session agent=%s env=%s", agent_id, env_id)
         session = client.beta.sessions.create(

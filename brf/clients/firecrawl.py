@@ -114,7 +114,10 @@ def _main(argv: list[str]) -> None:
     import sys
 
     if len(argv) < 2:
-        print("usage: python -m brf.clients.firecrawl {scrape URL | search QUERY [LIMIT]}", file=sys.stderr)
+        print(
+            "usage: python -m brf.clients.firecrawl {scrape URL | search QUERY [LIMIT]}",
+            file=sys.stderr,
+        )
         sys.exit(2)
     cmd = argv[1]
     if cmd == "scrape":

@@ -173,9 +173,7 @@ def test_fetch_happy_path_extracts_articles(monkeypatch):
     def fake_scrape(url):
         return {"markdown": ANTHROPIC_MD, "metadata": {}}
 
-    monkeypatch.setattr(
-        "brf.clients.firecrawl.scrape", fake_scrape, raising=False
-    )
+    monkeypatch.setattr("brf.clients.firecrawl.scrape", fake_scrape, raising=False)
     f = FirecrawlIndexFetcher([_entry()])
     items = list(f.fetch(datetime(2026, 1, 1, tzinfo=timezone.utc)))
     # 2 unique news URLs (research filtered out by regex, duplicate dropped)
@@ -234,14 +232,16 @@ def test_fetch_scrape_error_isolated(monkeypatch, capsys):
         return {"markdown": "[OpenAI thing](https://openai.com/index/cool-post)", "metadata": {}}
 
     monkeypatch.setattr("brf.clients.firecrawl.scrape", scrape, raising=False)
-    f = FirecrawlIndexFetcher([
-        _entry(),
-        _entry(
-            name="OpenAI News",
-            url="https://openai.com/news",
-            article_url_regex=r"https?://openai\.com/(?:index/)?[a-z0-9-]+",
-        ),
-    ])
+    f = FirecrawlIndexFetcher(
+        [
+            _entry(),
+            _entry(
+                name="OpenAI News",
+                url="https://openai.com/news",
+                article_url_regex=r"https?://openai\.com/(?:index/)?[a-z0-9-]+",
+            ),
+        ]
+    )
     items = list(f.fetch(datetime(2026, 1, 1, tzinfo=timezone.utc)))
     assert len(items) == 1
     assert items[0].source == "OpenAI News"

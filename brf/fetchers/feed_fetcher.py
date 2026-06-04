@@ -1,4 +1,5 @@
 """Shared scaffolding for HTTP-feed-backed fetchers (pool + GET + parse + filter)."""
+
 from __future__ import annotations
 
 import sys
