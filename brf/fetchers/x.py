@@ -2,7 +2,7 @@
 
 See BRF_FETCHER_DESIGN.md §3.4 (XFetcher row) and §10 Q2 (fetch_full no-op in v1).
 
-Wraps :func:`brf.x_client.fetch_user_recent` for parallel per-handle fetch.
+Wraps :func:`brf.clients.x.fetch_user_recent` for parallel per-handle fetch.
 Tweets are summary-complete (≤280 chars), so:
 
 * ``summary`` is the full tweet text.
@@ -17,8 +17,8 @@ from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 
+from brf.clients.x import fetch_user_recent
 from brf.feed_item import FeedItem, make_id
-from brf.x_client import fetch_user_recent
 
 from .base import SourceFetcher
 
@@ -94,7 +94,7 @@ class XFetcher(SourceFetcher):
         try:
             resp = fetch_user_recent(handle, since=since)
         except Exception as exc:
-            # Defensive: x_client catches its own httpx errors, but if
+            # Defensive: x client catches its own httpx errors, but if
             # something unexpected slips through don't tear down the pool.
             print(f"[x] fetch_user_recent crashed for @{handle}: {exc}", file=sys.stderr)
             return []

@@ -7,7 +7,7 @@ See BRF_FETCHER_DESIGN.md §3.4. Responsible for:
 * Per-entry normalize -> ``FeedItem`` with the "empty media:description"
   fallback (yt-dlp metadata-only) to pad the summary when the channel
   feed ships an empty entry-level description.
-* ``fetch_full`` drill-down: ``brf.youtube.get_transcript`` (which
+* ``fetch_full`` drill-down: ``brf.transcription.youtube.get_transcript`` (which
   internally does the youtube-transcript-api -> yt-dlp + Whisper
   two-leg fallback).
 
@@ -68,7 +68,7 @@ class YouTubeFetcher(FeedFetcher):
     def __init__(self, channels: list[dict], max_workers: int = 10):
         """Initialize.
 
-        ``channels`` shape (from ``sources.yaml`` ``youtube.channels``)::
+        ``channels`` shape (from ``feeds.yaml`` ``youtube.channels``)::
 
             [{name: str, channel_id: str}, ...]
         """
@@ -148,14 +148,14 @@ class YouTubeFetcher(FeedFetcher):
     def fetch_full(self, item: FeedItem) -> bytes | None:
         """Fetch a video's transcript on demand.
 
-        Wraps ``brf.youtube.get_transcript``, which already implements
+        Wraps ``brf.transcription.youtube.get_transcript``, which already implements
         the captions -> Whisper two-leg fallback. Returns the transcript
         text as UTF-8 bytes, or ``None`` if both legs failed.
 
         NEVER raises — returns ``None`` on any error.
         """
         try:
-            from brf.youtube import get_transcript
+            from brf.transcription.youtube import get_transcript
         except Exception as exc:
             print(
                 f"[youtube] transcript module unavailable for {item.url}: {exc}",

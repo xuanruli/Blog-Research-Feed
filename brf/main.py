@@ -47,8 +47,8 @@ def fetch_rss(since, opml):
     """Fetch new items from RSS/Atom feeds. Outputs JSON list of items."""
     from pathlib import Path
 
+    from .fetchers.rss_compat import fetch_recent
     from .io import emit_json
-    from .rss import fetch_recent
 
     items = fetch_recent(
         since=since,
@@ -63,8 +63,8 @@ def fetch_rss(since, opml):
               help="Only include posts on/after this date (YYYY-MM-DD).")
 def fetch_x_user(handle, since):
     """Fetch recent posts from an X user. Outputs JSON."""
+    from .clients.x import fetch_user_recent
     from .io import emit_json
-    from .x_client import fetch_user_recent
 
     result = fetch_user_recent(handle, since=since)
     emit_json(result)
@@ -74,8 +74,8 @@ def fetch_x_user(handle, since):
 @click.option("--url", type=str, required=True, help="YouTube video URL.")
 def fetch_youtube_transcript(url):
     """Fetch a YouTube transcript. Outputs JSON {title, transcript, channel}."""
-    from . import youtube
     from .io import emit_json
+    from .transcription import youtube
 
     emit_json(youtube.get_transcript(url))
 
@@ -86,8 +86,8 @@ def fetch_youtube_transcript(url):
               help="Index into the RSS entries list (0 = most recent).")
 def fetch_podcast_transcript(url, episode_index):
     """Fetch / generate a podcast transcript. Outputs JSON {title, transcript}."""
-    from . import podcast
     from .io import emit_json
+    from .transcription import podcast
 
     emit_json(podcast.get_transcript(url, episode_index=episode_index))
 
@@ -104,7 +104,7 @@ def firecrawl() -> None:
 @click.option("--url", type=str, required=True, help="URL to scrape.")
 def firecrawl_scrape(url):
     """Scrape a URL via Firecrawl. Outputs JSON {markdown, metadata}."""
-    from .firecrawl_client import scrape
+    from .clients.firecrawl import scrape
     from .io import emit_json
 
     try:
@@ -120,7 +120,7 @@ def firecrawl_scrape(url):
               help="Maximum number of results.")
 def firecrawl_search(query, limit):
     """Search the web via Firecrawl. Outputs JSON."""
-    from .firecrawl_client import search
+    from .clients.firecrawl import search
     from .io import emit_json
 
     try:
@@ -147,8 +147,8 @@ def report_slack(webhook_env, message_file):
     """Post a message to Slack via incoming webhook."""
     from pathlib import Path
 
+    from .delivery.slack import markdown_to_blocks, post_blocks
     from .io import emit_json
-    from .slack import markdown_to_blocks, post_blocks
 
     try:
         text = Path(message_file).read_text(encoding="utf-8")
@@ -179,7 +179,7 @@ def _build_aggregator(output_dir):
     from .fetchers.rss import RssFetcher
     from .fetchers.x import XFetcher
     from .fetchers.youtube import YouTubeFetcher
-    from .sources_config import active_podcast_feeds, active_rss_feeds, load_sources
+    from .sources.config import active_podcast_feeds, active_rss_feeds, load_sources
 
     output_dir = Path(output_dir)
     cfg = load_sources()

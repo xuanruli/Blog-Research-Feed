@@ -316,7 +316,7 @@ def test_fetch_full_returns_bytes(output_dir: Path):
     )
     f = RssFetcher(feeds=[], output_dir=output_dir)
 
-    with patch("brf.firecrawl_client.scrape", return_value={"markdown": "# Hi\n"}):
+    with patch("brf.clients.firecrawl.scrape", return_value={"markdown": "# Hi\n"}):
         result = f.fetch_full(item)
 
     assert result == b"# Hi\n"
@@ -338,7 +338,7 @@ def test_fetch_full_returns_none_on_failure(output_dir: Path):
     )
     f = RssFetcher(feeds=[], output_dir=output_dir)
 
-    with patch("brf.firecrawl_client.scrape", side_effect=RuntimeError("boom")):
+    with patch("brf.clients.firecrawl.scrape", side_effect=RuntimeError("boom")):
         assert f.fetch_full(item) is None
 
 

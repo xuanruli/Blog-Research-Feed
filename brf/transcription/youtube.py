@@ -20,7 +20,7 @@ from urllib.parse import parse_qs, urlparse
 
 import httpx
 
-from .config import get_env
+from ..config import get_env
 
 # Heuristic ceiling on duration we'll bother downloading. bestaudio is
 # typically m4a/webm in the 50–80 kbps range; ~70 min × 80 kbps ≈ 40 MB
@@ -208,7 +208,7 @@ def _download_audio_ytdlp(url: str, dest_dir: str) -> tuple[Optional[str], Optio
 
 def _transcribe_whisper(path: str, api_key: str) -> tuple[Optional[str], Optional[str]]:
     """POST ``path`` to OpenAI Whisper. Returns (text, error_message)."""
-    from .transcription import transcribe
+    from .whisper import transcribe
 
     return transcribe(path, api_key)
 
@@ -310,7 +310,7 @@ def get_transcript(url: str) -> dict:
 
 if __name__ == "__main__":  # pragma: no cover
     if len(sys.argv) < 2:
-        print("usage: python -m brf.youtube <youtube-url>", file=sys.stderr)
+        print("usage: python -m brf.transcription.youtube <youtube-url>", file=sys.stderr)
         sys.exit(2)
     out = get_transcript(sys.argv[1])
     print(json.dumps(out, ensure_ascii=False, indent=2))

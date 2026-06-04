@@ -20,7 +20,7 @@ from xml.etree import ElementTree as ET
 # The constants below are retained ONLY as back-compat re-exports for any
 # external code that may still import them. The shim itself does NOT
 # consult them — RssFetcher reads `enabled` / `summary_only` /
-# firecrawl_index entries directly from sources.yaml via sources_config.
+# firecrawl_index entries directly from sources.yaml via sources.config.
 # Remove once no importer remains (tracked in BRF_FETCHER_DESIGN.md §12).
 # ---------------------------------------------------------------------------
 SKIP_FEEDS: set[str] = set()
@@ -38,7 +38,7 @@ def _default_opml_path() -> Path:
         return mounted
     from importlib.resources import files
 
-    return Path(str(files("brf") / "sources.opml"))
+    return Path(str(files("brf.sources") / "feeds.opml"))
 
 
 def _parse_opml(opml_path: Path) -> list[dict]:
@@ -72,7 +72,7 @@ def _resolve_feeds(opml_path: Path | None) -> list[dict]:
     # mounted, honor the legacy OPML path. Otherwise, the yaml is canonical.
     if os.environ.get("BRF_SOURCES_OPML") or Path("/workspace/sources.opml").is_file():
         return _parse_opml(_default_opml_path())
-    from .sources_config import active_rss_feeds, load_sources
+    from ..sources.config import active_rss_feeds, load_sources
 
     return active_rss_feeds(load_sources())
 
@@ -89,7 +89,7 @@ def fetch_recent(
     ``needs_firecrawl``. Schema is frozen for the deployed Managed Agent's
     jq pipeline; see BRF_FETCHER_DESIGN.md §7 Phase 2.
     """
-    from .fetchers.rss import RssFetcher
+    from .rss import RssFetcher
 
     feeds = _resolve_feeds(opml_path)
     output_dir = Path(os.environ.get("BRF_RSS_OUTPUT_DIR", "/tmp/brf-rss"))

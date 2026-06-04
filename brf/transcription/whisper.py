@@ -1,9 +1,4 @@
-"""Shared OpenAI Whisper transcription.
-
-Single source of truth for the Whisper endpoint, the 25 MB upload ceiling,
-and the multipart POST. Both transcribers (``brf.youtube`` and
-``brf.podcast``) delegate here instead of each carrying their own copy.
-"""
+"""Shared OpenAI Whisper transcription: endpoint, 25 MB cap, and the upload POST."""
 from __future__ import annotations
 
 import os
@@ -18,12 +13,7 @@ WHISPER_TIMEOUT_SECS = 600.0
 
 
 def transcribe(path: str, api_key: str) -> tuple[Optional[str], Optional[str]]:
-    """POST ``path`` to OpenAI Whisper. Returns ``(text, error_message)``.
-
-    On success ``text`` is the transcript and ``error_message`` is ``None``;
-    on any failure ``text`` is ``None`` and ``error_message`` explains why.
-    The 25 MB cap is enforced before the upload.
-    """
+    """POST ``path`` to Whisper; return ``(text, error)`` with the 25 MB cap enforced first."""
     try:
         size = os.path.getsize(path)
     except OSError as e:
