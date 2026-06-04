@@ -89,6 +89,8 @@ _INDEX_PROMPT = (
     "List every article or blog post linked on this index page. For each, give its "
     "title, absolute URL, and published date as YYYY-MM-DD if one is shown (omit if none)."
 )
+# JSON extraction runs an LLM server-side; the 30s scrape default times out on long pages.
+_INDEX_SCRAPE_TIMEOUT_MS = 90_000
 
 
 def scrape_index(url: str) -> dict:
@@ -102,6 +104,7 @@ def scrape_index(url: str) -> dict:
                 {"type": "json", "prompt": _INDEX_PROMPT, "schema": _INDEX_ARTICLE_SCHEMA},
             ],
             only_main_content=True,
+            timeout=_INDEX_SCRAPE_TIMEOUT_MS,
         )
     except Exception as e:
         raise RuntimeError(f"Firecrawl index scrape failed for {url}: {e}") from e

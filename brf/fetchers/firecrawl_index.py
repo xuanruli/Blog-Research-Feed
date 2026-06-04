@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import sys
 from collections.abc import Iterable
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -16,6 +17,7 @@ from .base import SourceFetcher
 
 MAX_ITEMS_PER_INDEX = 25
 SUMMARY_MAX_CHARS = 500
+MAX_WORKERS = 8
 
 
 def _slug_to_title(url: str) -> str:
@@ -104,7 +106,7 @@ class FirecrawlIndexFetcher(SourceFetcher):
             )
 
     def fetch(self, since: datetime) -> Iterable[FeedItem]:
-        """Sequentially scrape every configured index page; per-entry failures are skipped."""
+        """Scrape every configured index page concurrently; per-entry failures are skipped."""
         if not self._entries:
             return []
 
@@ -123,14 +125,21 @@ class FirecrawlIndexFetcher(SourceFetcher):
             since_cmp = since_cmp.replace(tzinfo=timezone.utc)
 
         all_items: list[FeedItem] = []
-        for entry in self._entries:
-            try:
-                all_items.extend(self._fetch_one(entry, scrape_index, since_cmp))
-            except Exception as exc:
-                print(
-                    f"[firecrawl_index] crashed for {entry['url']}: {exc}",
-                    file=sys.stderr,
-                )
+        workers = min(MAX_WORKERS, len(self._entries))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {
+                pool.submit(self._fetch_one, entry, scrape_index, since_cmp): entry
+                for entry in self._entries
+            }
+            for fut in as_completed(futures):
+                entry = futures[fut]
+                try:
+                    all_items.extend(fut.result())
+                except Exception as exc:
+                    print(
+                        f"[firecrawl_index] crashed for {entry['url']}: {exc}",
+                        file=sys.stderr,
+                    )
         return all_items
 
     def _fetch_one(
