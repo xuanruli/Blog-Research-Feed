@@ -11,16 +11,9 @@ description: >
   /workspace/.env by the cron runner at session-create time.
 
 tools:
-  # Built-in toolset: bash, read, write, edit, glob, grep, web_search, web_fetch.
-  # Bash is the primary surface — the agent pipes brf subcommands together
-  # rather than going through a custom-tool round-trip.
   - type: agent_toolset_20260401
 
-# Multiagent roster — coordinator delegates long-form reads to readers
-# (parallel fan-out, 20-30×/day) and report QA to the reviewer (1-2×/day).
-# Subagent IDs are resolved by scripts/create_agent.py at provision time:
-# the script first creates/updates reader + reviewer, then injects their
-# IDs here when creating/updating the coordinator.
+# Subagent IDs are resolved by scripts/create_agent.py at provision time.
 multiagent:
   type: coordinator
   agents:

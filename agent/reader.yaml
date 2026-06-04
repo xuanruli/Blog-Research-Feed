@@ -16,7 +16,4 @@ description: >
   miss. Reviewer (Opus 4.7) is the final QA, not the only QA.
 
 tools:
-  # bash is enough — reader cats the file. read/grep/web_search/web_fetch
-  # come along with the toolset; reader prompt restricts use to local
-  # files only (no network — curator already drilled).
   - type: agent_toolset_20260401
