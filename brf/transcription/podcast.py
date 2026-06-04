@@ -1,8 +1,4 @@
-"""Podcast episode transcriber.
-
-Parses a podcast RSS feed, downloads the chosen episode's audio, and
-transcribes it via the OpenAI Whisper API (`whisper-1`).
-"""
+"""Podcast episode transcriber: parse RSS, download the audio, Whisper-transcribe it."""
 
 from __future__ import annotations
 
@@ -23,18 +19,15 @@ def _pick_enclosure_url(entry) -> Optional[str]:
     """Find the best audio enclosure URL from a feedparser entry."""
     enclosures = getattr(entry, "enclosures", None) or []
     if enclosures:
-        # Prefer audio/* enclosures.
         for enc in enclosures:
             href = enc.get("href") or enc.get("url")
             etype = (enc.get("type") or "").lower()
             if href and etype.startswith("audio"):
                 return href
-        # Fallback: first enclosure with an href.
         for enc in enclosures:
             href = enc.get("href") or enc.get("url")
             if href:
                 return href
-    # Some feeds expose links with rel="enclosure".
     for link in getattr(entry, "links", []) or []:
         if link.get("rel") == "enclosure" and link.get("href"):
             return link["href"]
@@ -47,7 +40,6 @@ def _download_audio(url: str, dest_path: str) -> tuple[bool, Optional[str], Opti
         with httpx.stream("GET", url, follow_redirects=True, timeout=60.0) as r:
             if r.status_code != 200:
                 return False, "download_failed", f"http {r.status_code}"
-            # Check Content-Length up-front if present.
             cl = r.headers.get("content-length")
             if cl and cl.isdigit() and int(cl) > _MAX_BYTES:
                 return False, "too_large", f"content-length {cl} > {_MAX_BYTES}"
@@ -80,11 +72,7 @@ def _transcribe_whisper(
 
 
 def get_transcript(rss_url: str, episode_index: int = 0) -> dict:
-    """Download and transcribe a podcast episode from an RSS feed.
-
-    Returns dict with keys: title, podcast, episode_url, published,
-    transcript, status, error_message.
-    """
+    """Download and transcribe one podcast episode; returns a result dict."""
     result: dict = {
         "title": None,
         "podcast": None,
@@ -142,7 +130,6 @@ def get_transcript(rss_url: str, episode_index: int = 0) -> dict:
         result["error_message"] = "OPENAI_API_KEY not set"
         return result
 
-    # Download to a tempfile, transcribe, clean up.
     with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
         tmp_path = tmp.name
 

@@ -1,17 +1,4 @@
-"""PodcastFetcher — Phase 3c of the brf fetcher refactor.
-
-See BRF_FETCHER_DESIGN.md §3.4 (PodcastFetcher row). Responsible for:
-
-* Concurrent (10 workers) httpx fetch of every enabled podcast RSS feed.
-* Per-episode normalize -> ``FeedItem`` with show-notes summary and
-  ``extra={audio_url, duration_seconds, feed_url}``. The audio enclosure
-  and itunes:duration are surfaced by ``parse_feed`` directly.
-* ``fetch_full`` drill-down: download the audio enclosure and transcribe
-  via OpenAI Whisper. Returns ``None`` if no audio enclosure is available.
-
-The bulk fetch/parse/since-filter scaffolding lives in
-:class:`brf.fetchers.feed_fetcher.FeedFetcher`.
-"""
+"""PodcastFetcher: podcast RSS feeds; drill-down Whisper-transcribes the audio."""
 
 from __future__ import annotations
 
@@ -29,27 +16,15 @@ __all__ = ["PodcastFetcher", "_parse_duration"]
 
 
 class PodcastFetcher(FeedFetcher):
-    """Fetcher for podcast RSS feeds. See module docstring + design §3.4."""
+    """Fetcher for podcast RSS feeds."""
 
     source_type = "podcast"
     log_prefix = "[podcast]"
 
     def __init__(self, feeds: list[dict], max_workers: int = 10):
-        """Initialize.
-
-        ``feeds`` shape (from ``feeds.yaml`` ``podcasts:`` block, typically
-        filtered through :func:`brf.sources.config.active_podcast_feeds`)::
-
-            [{name: str, url: str, enabled: bool = True,
-              reason: str = ""}, ...]
-
-        Disabled feeds are skipped defensively here too (in case the caller
-        passed the raw list).
-        """
+        """Feeds shape: ``[{name, url, enabled}, ...]``; disabled ones are skipped."""
         self.max_workers = max(1, int(max_workers))
         self._feeds: list[dict] = [f for f in feeds if f.get("enabled", True) is not False]
-
-    # -- FeedFetcher hooks ---------------------------------------------------
 
     def _feed_units(self) -> list[tuple[str, dict]]:
         return [(f["url"], f) for f in self._feeds]
@@ -57,8 +32,6 @@ class PodcastFetcher(FeedFetcher):
     def _normalize(self, entry: dict, meta: dict, source_title: str) -> Optional[FeedItem]:
         link = entry.get("link") or ""
         audio_url = entry.get("audio_url")
-        # Use the page URL when present, else audio URL — but we need
-        # *some* URL for the id.
         item_url = link or audio_url or ""
         if not item_url:
             return None
@@ -81,14 +54,8 @@ class PodcastFetcher(FeedFetcher):
             },
         )
 
-    # -- drill-down ----------------------------------------------------------
-
     def fetch_full(self, item: FeedItem) -> bytes | None:
-        """Download the episode audio and Whisper-transcribe it.
-
-        Returns ``None`` (and logs to stderr) on any failure; never raises.
-        Returns ``None`` immediately when no ``audio_url`` is on the item.
-        """
+        """Download the episode audio and Whisper-transcribe it; None if no audio or on failure."""
         audio_url = (item.extra or {}).get("audio_url")
         if not audio_url:
             print(
@@ -98,8 +65,6 @@ class PodcastFetcher(FeedFetcher):
             return None
 
         try:
-            # Late import: keeps stdlib-only test paths free of heavy deps,
-            # and lets tests patch these names on the brf.transcription.podcast module.
             from brf.config import get_env
             from brf.transcription import podcast as _podcast_mod
         except Exception as exc:

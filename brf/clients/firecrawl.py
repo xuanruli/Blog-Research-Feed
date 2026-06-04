@@ -1,9 +1,4 @@
-"""Firecrawl scrape/search client.
-
-Thin wrapper around the official `firecrawl-py` SDK that normalizes response
-shapes (pydantic models in newer SDKs, plain dicts in older ones) into the
-JSON-friendly dicts the CLI emits to stdout.
-"""
+"""Firecrawl scrape/search/index client; normalizes SDK responses to plain dicts."""
 
 from __future__ import annotations
 
@@ -31,11 +26,7 @@ def _client():
 
 
 def scrape(url: str) -> dict:
-    """Scrape `url` via Firecrawl.
-
-    Returns {markdown, metadata: {title, author, published, source_url}, status_code}.
-    Raises RuntimeError on API failure.
-    """
+    """Scrape ``url``; return ``{markdown, metadata, status_code}``, raise on API failure."""
     app = _client()
     try:
         # firecrawl-py v4 renamed the method to `scrape`; the v1/v2

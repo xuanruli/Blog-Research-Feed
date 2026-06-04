@@ -211,8 +211,7 @@ def test_network_error_logged_does_not_crash(capsys):
 
 
 def test_disabled_feeds_filtered_defensively():
-    """PodcastFetcher should iterate whatever it's given, but defensively
-    honor `enabled=false` in case caller passes the raw list."""
+    """PodcastFetcher honors ``enabled=false`` even if passed the raw feed list."""
     feeds = [
         {"name": "On", "url": "https://on.example/rss"},
         {"name": "Off", "url": "https://off.example/rss", "enabled": False, "reason": "dead"},

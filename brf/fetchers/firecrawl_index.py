@@ -1,23 +1,4 @@
-"""FirecrawlIndexFetcher — Phase 4 of the brf fetcher refactor.
-
-See BRF_FETCHER_DESIGN.md §3.4 (FirecrawlIndexFetcher row) + §3.3
-(sequential concurrency note). Responsible for:
-
-* Firecrawl JSON-extract each configured index page (e.g.,
-  ``https://www.anthropic.com/news``) into ``{title, url, published}`` per
-  article; ``article_url_regex`` filters those down to real article URLs.
-* Resolve each item's date from the extracted ``published``, falling back to
-  a date parsed out of the URL (``date_format``/``date_group``: ``%Y-%m-%d``
-  slugs and the HF papers ``yymm`` arXiv-id convention). Under a ``since``
-  cutoff, items that can't be dated are dropped, not re-surfaced every run.
-* Emit ``FeedItem(source_type="firecrawl_index", has_full=False,
-  needs_firecrawl=True)``. The agent drills down via ``fetch_full``,
-  which firecrawl-scrapes the article URL and returns markdown bytes.
-
-Concurrency: sequential by default (one firecrawl call at a time).
-firecrawl-py thread safety isn't guaranteed and the index list is
-small (~30 entries × 1 scrape/entry/day).
-"""
+"""FirecrawlIndexFetcher: JSON-extract dated articles from no-feed index pages."""
 
 from __future__ import annotations
 
@@ -44,18 +25,9 @@ def _slug_to_title(url: str) -> str:
 
 
 def _parse_index_date(raw: str, fmt: str) -> Optional[datetime]:
-    """Parse ``raw`` according to ``fmt``.
-
-    ``fmt`` is normally an ``strptime`` format (``"%Y-%m-%d"``). The
-    special value ``"yymm"`` handles the HF papers arXiv-id convention:
-    ``2401.12345`` → 2024-01-01. Returns ``None`` on any parse failure.
-    """
+    """Parse a URL-encoded date by ``fmt`` (strptime, or "yymm" for arXiv ids); None on failure."""
     if fmt == "yymm":
-        # arXiv id like "2401.12345" → year 2024, month 01. The yymm
-        # prefix tells us nothing finer than the month, so stamp the
-        # result at the last day of that month: a paper submitted any
-        # time in May 2026 should pass a `since=2026-05-17` filter,
-        # not be excluded for being "before" the cutoff.
+        # Month precision: stamp month-end so same-month items pass a since cutoff.
         import calendar
 
         s = raw.split(".", 1)[0]
@@ -93,27 +65,12 @@ def _parse_iso_date(raw: Optional[str]) -> Optional[datetime]:
 
 
 class FirecrawlIndexFetcher(SourceFetcher):
-    """Fetcher for no-feed sites scraped via Firecrawl. See module docstring."""
+    """Fetcher for no-feed sites scraped via Firecrawl."""
 
     source_type = "firecrawl_index"
 
     def __init__(self, entries: list[dict]):
-        """Initialize.
-
-        ``entries`` shape (from ``feeds.yaml`` ``firecrawl_index:`` block)::
-
-            [{name: str, url: str,
-              article_url_regex: str,
-              date_format: str | None,
-              date_group: int | None,
-              slug_blocklist: list[str] | None,  # optional
-              enabled: bool = True}, ...]
-
-        Disabled entries are filtered out. ``article_url_regex`` strings
-        are compiled once here so per-entry fetches are zero-overhead.
-        Entries with an invalid regex are dropped (logged to stderr) so a
-        single typo can't sink the whole run.
-        """
+        """Compile each entry's ``article_url_regex``; drop disabled or bad-regex entries."""
         self._entries: list[dict] = []
         for e in entries:
             if e.get("enabled", True) is False:
@@ -146,14 +103,8 @@ class FirecrawlIndexFetcher(SourceFetcher):
                 }
             )
 
-    # -- bulk fetch ----------------------------------------------------------
-
     def fetch(self, since: datetime) -> Iterable[FeedItem]:
-        """Sequentially scrape every configured index page.
-
-        Per-entry failures are logged to stderr and skipped — one bad
-        firecrawl call must not abort the whole run.
-        """
+        """Sequentially scrape every configured index page; per-entry failures are skipped."""
         if not self._entries:
             return []
 
@@ -279,13 +230,8 @@ class FirecrawlIndexFetcher(SourceFetcher):
             return None
         return _parse_index_date(captured, date_format) if captured else None
 
-    # -- drill-down ----------------------------------------------------------
-
     def fetch_full(self, item: FeedItem) -> bytes | None:
-        """Firecrawl scrape ``item.url`` and return markdown bytes.
-
-        Returns ``None`` (logged to stderr) on any failure; never raises.
-        """
+        """Firecrawl scrape ``item.url`` and return markdown bytes, or None on failure."""
         try:
             from brf.clients.firecrawl import scrape as fc_scrape
         except Exception as exc:
