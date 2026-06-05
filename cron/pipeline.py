@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime as _dt
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -42,6 +43,15 @@ def daily_kickoff(today: str, yesterday: str) -> str:
         f"今天 (UTC) 是 {today}，请按 system prompt 的 pipeline 处理 {yesterday} 的内容。\n"
         f"YESTERDAY={yesterday}"
     )
+
+
+_REPORT_RE = re.compile(r"<report>(.*?)</report>", re.DOTALL)
+
+
+def _extract_report(text: str) -> str:
+    """Pull the report out of the agent's final message; fall back to the whole text if unmarked."""
+    match = _REPORT_RE.search(text or "")
+    return (match.group(1) if match else text or "").strip()
 
 
 def _build_session_resources(client: Any, file_id: str) -> list[dict[str, Any]]:
@@ -89,7 +99,7 @@ def run_daily_session(
             auto_archive_agents=AUTO_ARCHIVE_AGENTS,
         )
         LOG.info("session id=%s", session.id)
-        report = session.ask(daily_kickoff(today, yesterday))
+        report = _extract_report(session.ask(daily_kickoff(today, yesterday)))
         return report, session.id
     finally:
         if uploaded_here:

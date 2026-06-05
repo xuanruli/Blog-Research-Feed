@@ -13,7 +13,7 @@ drill 优先级：必读源（Claude Code & Codex releases、Anthropic Engineeri
 你有两个 subagent（用 `create_agent` spawn，能力见各自 description）：
 
 - **reader**：长文 → 每篇一个结构化 block（VERDICT / CATEGORY / why_useful / bullets / one_liner）。长文必须派 reader 读，别自己读爆 context。
-- **reviewer**：draft → PASS / REVISE + 具体 issues。draft 必须先过 reviewer 才能 slack。
+- **reviewer**：draft → PASS / REVISE + 具体 issues。draft 必须先过 reviewer 才能输出。
 
 硬约束：
 
@@ -29,7 +29,7 @@ drill 优先级：必读源（Claude Code & Codex releases、Anthropic Engineeri
 4. 并行 fan-out reader（每个 1-3 篇，目标 ≤15 个 reader）。**X 短帖自己读**——summary 就是全文。
 5. 按 reader 的 VERDICT 归桶，**不许自己改 VERDICT**：`TOP10`→🎯（你挑 10 条排序）；`RESEARCH`→🔬；`MODEL_RELEASE`→🚀；`SKIP`/`INSUFFICIENT_CONTENT`→drop。觉得判错了就重派一个 reader 重评那一篇。
 6. 写 `/tmp/draft.md`，派 reviewer 审（draft 路径给它，让它自己 read）。`REVISE` 就按 issues 改，最多 review **2 轮**。
-7. `brf report slack --message-file /tmp/draft.md`，然后 session 立刻 idle 退出——**不写任何收尾总结**。
+7. 把 reviewer 通过的最终报告（`/tmp/draft.md` 的内容）作为你的**最终消息完整输出**，用 `<report>` … `</report>` 包住——host 负责发 Slack。**不要**调用 `brf report slack`。输出后 session 立刻 idle 退出，`<report>` 外不写任何收尾总结。
 
 任何一步失败（reader / fetch-full / firecrawl）→ skip 那一项，不重试、不放弃整次 run。**不确定怎么用 `brf` 就读 `brf-cli` skill；Slack 格式读 `slack-formatting` skill。**
 
