@@ -49,7 +49,7 @@ bash directly, piping subcommands through `jq`.
 
 ## 2. Components
 
-- **Managed Agent** (`agent/agent.yaml`, model `claude-opus-4-7`)
+- **Managed Agent** (`agent/agent.yaml`, model `claude-sonnet-4-6`)
   - System prompt (`agent/system_prompt.md`) teaches the bash + brf pipe
     pattern with concrete examples.
   - Tools: **only `agent_toolset_20260401`** (bash, read, write, edit, glob,
