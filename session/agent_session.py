@@ -14,11 +14,7 @@ def _user_message(text: str) -> dict:
 
 @dataclass
 class AgentSession:
-    """Handle to a server-side Managed Agents session.
-
-    Reuse the same instance (same ``id``) across turns to keep conversation context — that is what
-    makes Slack follow-ups land in the same session that produced the daily report.
-    """
+    """Handle to a server-side Managed Agents session; reuse the same id across turns to keep context."""
 
     client: Any
     id: str

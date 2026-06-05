@@ -14,11 +14,7 @@ def _truncate(text: str, limit: int = 500) -> str:
 
 
 class SessionDrain:
-    """One drain of a session's event stream.
-
-    Collects the coordinator's reply text, auto-archives fire-and-forget reader threads as they
-    go idle (to free the 25-thread budget), and stops when the session reaches a terminal state.
-    """
+    """Drain a session's event stream to terminal: collect the coordinator's reply, archive reader threads."""
 
     def __init__(
         self, client: Any, session_id: str, auto_archive_agents: frozenset[str] = frozenset()
