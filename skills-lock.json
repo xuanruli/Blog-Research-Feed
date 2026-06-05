@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "skills": {
+    "agent-design-principles": {
+      "source": "xuanruli/Deslop",
+      "sourceType": "github",
+      "skillPath": "skills/agent-design-principles/SKILL.md",
+      "computedHash": "88850de985bc7a8698dd8b387dc90ea908d428d24a084e1a1f85defd10cf8b99"
+    },
+    "code-design-principles": {
+      "source": "xuanruli/Deslop",
+      "sourceType": "github",
+      "skillPath": "skills/code-design-principles/SKILL.md",
+      "computedHash": "031e27f4e45d3b0fc91cecf6c78deda4c2d828e1238a852ad0a52edc55fbae62"
+    },
+    "naming-principles": {
+      "source": "xuanruli/Deslop",
+      "sourceType": "github",
+      "skillPath": "skills/naming-principles/SKILL.md",
+      "computedHash": "d102ae96acaf30bad9b386ac6daa6b8ff29e0050997c2019ab10c9702c21d327"
+    },
+    "project-structure": {
+      "source": "xuanruli/Deslop",
+      "sourceType": "github",
+      "skillPath": "skills/project-structure/SKILL.md",
+      "computedHash": "a7760803e5b3825a64be81c6d9b3efe07c14880fee537aa8e57293b362632a80"
+    }
+  }
+}
