@@ -1,4 +1,4 @@
-"""Daily cron runner: mount the .env, create a session, stream it to completion."""
+"""Daily cron runner: mount the .env, create a session, drive it to completion."""
 
 from __future__ import annotations
 
@@ -11,9 +11,11 @@ import os
 import signal
 import sys
 import threading
-import time
 from pathlib import Path
 from typing import Any, Optional
+
+from session import AgentSession, resolve_agent_and_env, resolve_memory_store_id
+from session.provisioning import read_yaml_name
 
 LOG = logging.getLogger("cron.daily")
 
@@ -36,6 +38,9 @@ MEMORY_STORE_INSTRUCTIONS = (
     "after sending the report, record new good/trash source judgments."
 )
 
+# Fire-and-forget agents whose threads are archived on first idle (reviewer is not).
+AUTO_ARCHIVE_AGENTS = frozenset({"blog-research-feed-reader"})
+
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 AGENT_YAML_PATH = _PROJECT_ROOT / "agent" / "agent.yaml"
 ENV_YAML_PATH = _PROJECT_ROOT / "agent" / "environment.yaml"
@@ -57,7 +62,7 @@ def _setup_logging() -> None:
         datefmt="%Y-%m-%dT%H:%M:%S",
         stream=sys.stderr,
     )
-    logging.Formatter.converter = time.gmtime
+    logging.Formatter.converter = __import__("time").gmtime
 
 
 class _Timeout(RuntimeError):
@@ -109,10 +114,7 @@ def _build_env_payload(extra: Optional[dict[str, str]] = None) -> bytes:
 
 def _upload_env_file(client: Any, payload: bytes) -> Any:
     buf = io.BytesIO(payload)
-    return client.beta.files.upload(
-        file=(".env", buf, "text/plain"),
-        betas=FILES_BETAS,
-    )
+    return client.beta.files.upload(file=(".env", buf, "text/plain"), betas=FILES_BETAS)
 
 
 def _try_delete_file(client: Any, file_id: str) -> None:
@@ -123,64 +125,21 @@ def _try_delete_file(client: Any, file_id: str) -> None:
         LOG.warning("failed to delete env file %s: %s", file_id, exc)
 
 
-def _read_yaml_name(path: Path) -> str:
-    """Read the top-level ``name:`` field from a yaml file."""
-    import yaml
-
-    try:
-        data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except FileNotFoundError as exc:
-        raise RuntimeError(
-            f"Expected {path} (this cron runner script runs from the repo root)."
-        ) from exc
-    name = (data or {}).get("name")
-    if not name:
-        raise RuntimeError(f"{path} is missing a top-level 'name:' field.")
-    return name
-
-
-def _find_active_by_name(items: Any, name: str) -> Any:
-    """Pick the unique non-archived item named ``name``; raise on zero or many."""
-    matches = [
-        x
-        for x in items
-        if getattr(x, "name", None) == name and getattr(x, "archived_at", None) is None
+def _session_resources(client: Any, file_id: str) -> list[dict[str, Any]]:
+    resources: list[dict[str, Any]] = [
+        {"type": "file", "file_id": file_id, "mount_path": CONTAINER_ENV_PATH}
     ]
-    if not matches:
-        raise RuntimeError(
-            f"No active resource named {name!r}. Run `python scripts/create_agent.py` to provision."
+    memory_store_id = resolve_memory_store_id(client, MEMORY_STORE_NAME)
+    if memory_store_id:
+        resources.append(
+            {
+                "type": "memory_store",
+                "memory_store_id": memory_store_id,
+                "access": "read_write",
+                "instructions": MEMORY_STORE_INSTRUCTIONS,
+            }
         )
-    if len(matches) > 1:
-        ids = ", ".join(getattr(m, "id", "?") for m in matches)
-        raise RuntimeError(
-            f"Multiple active resources named {name!r} ({ids}). Archive the stale ones."
-        )
-    return matches[0]
-
-
-def _resolve_agent_and_env(client: Any) -> tuple[str, str]:
-    """Return (agent_id, env_id) by looking them up by name."""
-    agent_name = _read_yaml_name(AGENT_YAML_PATH)
-    env_name = _read_yaml_name(ENV_YAML_PATH)
-    LOG.info("resolving agent=%r env=%r by name", agent_name, env_name)
-
-    agent = _find_active_by_name(client.beta.agents.list(), agent_name)
-    env = _find_active_by_name(client.beta.environments.list(), env_name)
-
-    LOG.info("resolved agent.id=%s env.id=%s", agent.id, env.id)
-    return agent.id, env.id
-
-
-def _resolve_memory_store_id(client: Any) -> Optional[str]:
-    try:
-        match = _find_active_by_name(client.beta.memory_stores.list(), MEMORY_STORE_NAME)
-    except RuntimeError as exc:
-        LOG.warning(
-            "memory store %r unavailable (%s) — running without memory", MEMORY_STORE_NAME, exc
-        )
-        return None
-    LOG.info("resolved memory_store.id=%s", match.id)
-    return match.id
+    return resources
 
 
 def run(dry_run: bool = False) -> int:
@@ -200,8 +159,8 @@ def run(dry_run: bool = False) -> int:
 
     if dry_run:
         plan = {
-            "agent_name": _read_yaml_name(AGENT_YAML_PATH),
-            "env_name": _read_yaml_name(ENV_YAML_PATH),
+            "agent_name": read_yaml_name(AGENT_YAML_PATH),
+            "env_name": read_yaml_name(ENV_YAML_PATH),
             "today": today,
             "yesterday": yesterday,
             "env_source": (
@@ -222,7 +181,7 @@ def run(dry_run: bool = False) -> int:
     from anthropic import Anthropic
 
     client = Anthropic()
-    agent_id, env_id = _resolve_agent_and_env(client)
+    agent_id, env_id = resolve_agent_and_env(client, AGENT_YAML_PATH, ENV_YAML_PATH)
 
     if preuploaded_file_id:
         file_id = preuploaded_file_id
@@ -235,32 +194,15 @@ def run(dry_run: bool = False) -> int:
         delete_after = True
 
     try:
-        resources: list[dict[str, Any]] = [
-            {"type": "file", "file_id": file_id, "mount_path": CONTAINER_ENV_PATH}
-        ]
-        memory_store_id = _resolve_memory_store_id(client)
-        if memory_store_id:
-            resources.append(
-                {
-                    "type": "memory_store",
-                    "memory_store_id": memory_store_id,
-                    "access": "read_write",
-                    "instructions": MEMORY_STORE_INSTRUCTIONS,
-                }
-            )
-
-        LOG.info("creating session agent=%s env=%s", agent_id, env_id)
-        session = client.beta.sessions.create(
-            agent=agent_id,
+        session = AgentSession.create(
+            client,
+            agent_id=agent_id,
             environment_id=env_id,
             title=f"Daily aggregation {today}",
-            resources=resources,
+            resources=_session_resources(client, file_id),
+            auto_archive_agents=AUTO_ARCHIVE_AGENTS,
         )
-        LOG.info(
-            "session id=%s status=%s",
-            session.id,
-            getattr(session, "status", "?"),
-        )
+        LOG.info("session id=%s", session.id)
 
         kickoff_text = (
             f"今天 (UTC) 是 {today}，请按 system prompt 的 pipeline 处理 {yesterday} 的内容。\n"
@@ -269,19 +211,7 @@ def run(dry_run: bool = False) -> int:
 
         _arm_timeout(HARD_TIMEOUT_SECONDS)
         try:
-            # Open stream BEFORE sending kickoff (stream-first ordering).
-            with client.beta.sessions.events.stream(session.id) as stream:
-                client.beta.sessions.events.send(
-                    session.id,
-                    events=[
-                        {
-                            "type": "user.message",
-                            "content": [{"type": "text", "text": kickoff_text}],
-                        }
-                    ],
-                )
-                LOG.info("kickoff sent")
-                _drain(stream, client=client, session_id=session.id)
+            session.ask(kickoff_text)
         except _Timeout as exc:
             LOG.error("hard timeout: %s", exc)
             delete_after = False  # keep the .env file for debugging
@@ -294,188 +224,6 @@ def run(dry_run: bool = False) -> int:
         if delete_after:
             _try_delete_file(client, file_id)
     return 0
-
-
-# Fire-and-forget agents whose threads are archived on first idle (reviewer is not).
-_AUTO_ARCHIVE_AGENTS: frozenset[str] = frozenset(
-    {
-        "blog-research-feed-reader",
-    }
-)
-
-
-def _archive_thread_safe(client: Any, session_id: str, thread_id: str, agent_name: str) -> None:
-    """Archive a thread, swallowing errors — never abort the run for cleanup."""
-    try:
-        client.beta.sessions.threads.archive(thread_id, session_id=session_id)
-        LOG.info("archived %s thread %s", agent_name, thread_id)
-    except Exception as exc:  # noqa: BLE001
-        LOG.warning(
-            "failed to archive %s thread %s: %s — slot stays occupied",
-            agent_name,
-            thread_id,
-            exc,
-        )
-
-
-class _DrainState:
-    """Per-drain bookkeeping: reader threads awaiting reaping, and whether the session ran."""
-
-    def __init__(self, client: Any, session_id: str):
-        self._client = client
-        self._session_id = session_id
-        self._reader_threads: set[str] = set()
-        self.has_seen_running = False
-
-    def track(self, agent_name: str, thread_id: str) -> None:
-        """Remember a new reader thread so it can be archived once it idles."""
-        if thread_id and agent_name in _AUTO_ARCHIVE_AGENTS:
-            self._reader_threads.add(thread_id)
-
-    def reap(self, thread_id: str) -> None:
-        """Archive a reader thread the moment it idles, freeing its concurrency slot."""
-        if thread_id not in self._reader_threads:
-            return
-        self._reader_threads.discard(thread_id)
-        _archive_thread_safe(self._client, self._session_id, thread_id, "blog-research-feed-reader")
-
-
-def _on_agent_message(event: Any, state: _DrainState) -> bool:
-    for block in getattr(event, "content", []) or []:
-        if getattr(block, "type", None) == "text":
-            LOG.info("agent.message: %s", _truncate(block.text))
-    return False
-
-
-def _on_tool_use(event: Any, state: _DrainState) -> bool:
-    LOG.info("agent.tool_use name=%s", getattr(event, "name", "?"))
-    return False
-
-
-def _on_tool_result(event: Any, state: _DrainState) -> bool:
-    LOG.info("agent.tool_result is_error=%s", getattr(event, "is_error", False))
-    return False
-
-
-def _on_thinking(event: Any, state: _DrainState) -> bool:
-    text = "".join(getattr(b, "text", "") or "" for b in (getattr(event, "content", []) or []))
-    LOG.debug("agent.thinking: %s", _truncate(text, 200))
-    return False
-
-
-def _on_thread_created(event: Any, state: _DrainState) -> bool:
-    agent_name = getattr(event, "agent_name", "?")
-    thread_id = getattr(event, "session_thread_id", "?")
-    LOG.info("thread_created agent=%s id=%s", agent_name, thread_id)
-    state.track(agent_name, thread_id)
-    return False
-
-
-def _on_thread_running(event: Any, state: _DrainState) -> bool:
-    LOG.info("thread_running id=%s", getattr(event, "session_thread_id", "?"))
-    return False
-
-
-def _on_thread_idle(event: Any, state: _DrainState) -> bool:
-    thread_id = getattr(event, "session_thread_id", "?")
-    LOG.info(
-        "thread_idle id=%s stop_reason=%s",
-        thread_id,
-        getattr(getattr(event, "stop_reason", None), "type", None),
-    )
-    state.reap(thread_id)
-    return False
-
-
-def _on_thread_terminated(event: Any, state: _DrainState) -> bool:
-    LOG.warning("thread_terminated id=%s", getattr(event, "session_thread_id", "?"))
-    return False
-
-
-def _on_thread_msg_sent(event: Any, state: _DrainState) -> bool:
-    LOG.info(
-        "thread_msg_sent to=%s thread=%s",
-        getattr(event, "to_agent_name", "?"),
-        getattr(event, "to_session_thread_id", "?"),
-    )
-    return False
-
-
-def _on_thread_msg_received(event: Any, state: _DrainState) -> bool:
-    # Don't reap here: the thread is often still running; reap on its idle event.
-    LOG.info(
-        "thread_msg_received from=%s thread=%s",
-        getattr(event, "from_agent_name", "?"),
-        getattr(event, "from_session_thread_id", None),
-    )
-    return False
-
-
-def _on_status_running(event: Any, state: _DrainState) -> bool:
-    state.has_seen_running = True
-    LOG.info("status_running")
-    return False
-
-
-def _on_status_idle(event: Any, state: _DrainState) -> bool:
-    stop_type = getattr(getattr(event, "stop_reason", None), "type", None)
-    LOG.info("status_idle stop_reason=%s has_seen_running=%s", stop_type, state.has_seen_running)
-    if not state.has_seen_running:
-        return False
-    if stop_type == "requires_action":
-        LOG.warning("unexpected requires_action without custom tools; continuing")
-        return False
-    return True
-
-
-def _on_status_terminated(event: Any, state: _DrainState) -> bool:
-    LOG.warning("session.status_terminated")
-    return True
-
-
-def _on_session_error(event: Any, state: _DrainState) -> bool:
-    err = getattr(event, "error", None)
-    LOG.error("session.error: %s", getattr(err, "message", None) if err else "unknown")
-    return True
-
-
-# event type -> handler(event, state) -> stop draining?  Unmapped types just log at debug.
-_STREAM_HANDLERS: dict[str, Any] = {
-    "agent.message": _on_agent_message,
-    "agent.tool_use": _on_tool_use,
-    "agent.tool_result": _on_tool_result,
-    "agent.thinking": _on_thinking,
-    "session.thread_created": _on_thread_created,
-    "session.thread_status_running": _on_thread_running,
-    "session.thread_status_idle": _on_thread_idle,
-    "session.thread_status_terminated": _on_thread_terminated,
-    "agent.thread_message_sent": _on_thread_msg_sent,
-    "agent.thread_message_received": _on_thread_msg_received,
-    "session.status_running": _on_status_running,
-    "session.status_idle": _on_status_idle,
-    "session.status_terminated": _on_status_terminated,
-    "session.error": _on_session_error,
-}
-
-
-def _drain(stream: Any, client: Any, session_id: str) -> None:
-    """Consume the SSE stream, reaping reader threads as they idle, until the session ends."""
-    state = _DrainState(client, session_id)
-    for event in stream:
-        etype = getattr(event, "type", None)
-        handler = _STREAM_HANDLERS.get(etype)
-        if handler is None:
-            LOG.debug("event %s", etype)
-            continue
-        if handler(event, state):
-            break
-
-
-def _truncate(text: str, limit: int = 500) -> str:
-    text = text or ""
-    if len(text) <= limit:
-        return text
-    return text[:limit] + f"... [+{len(text) - limit} chars]"
 
 
 def main(argv: Optional[list[str]] = None) -> int:

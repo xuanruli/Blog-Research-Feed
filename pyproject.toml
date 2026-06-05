@@ -28,7 +28,7 @@ podcast = ["feedparser"]
 brf = "brf.main:cli"
 
 [tool.setuptools.packages.find]
-include = ["brf*", "cron*"]
+include = ["brf*", "cron*", "session*"]
 
 [tool.setuptools.package-data]
 "brf.sources" = ["*.yaml", "*.opml"]
