@@ -10,10 +10,5 @@ description: >
   the moment it returns its result — readers are strictly fire-and-
   forget; coordinator does NOT send_to_agent for follow-up.
 
-  Sonnet 4.6 (no extended thinking — default). The task is extract-and-
-  rephrase, doesn't need long reasoning; but Sonnet's quality ceiling
-  is high enough to catch subtle why-useful judgments that Haiku might
-  miss. Reviewer (Opus 4.7) is the final QA, not the only QA.
-
 tools:
   - type: agent_toolset_20260401

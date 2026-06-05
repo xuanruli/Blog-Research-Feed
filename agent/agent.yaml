@@ -1,6 +1,6 @@
 name: blog-research-feed-curator
 model:
-  id: claude-opus-4-7
+  id: claude-sonnet-4-6
 system: "@./agent/system_prompt.md"
 description: >
   Daily AI-engineering-signal curator (coordinator). Uses the pre-installed
