@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from .drain import SessionRun
+from .drain import SessionDrain
 
 
 def _user_message(text: str) -> dict:
@@ -46,7 +46,7 @@ class AgentSession:
 
     def ask(self, text: str) -> str:
         """Send one user message, drain to idle (stream-first), and return the coordinator's reply text."""
-        run = SessionRun(self.client, self.id, self.auto_archive_agents)
+        drain = SessionDrain(self.client, self.id, self.auto_archive_agents)
         with self.client.beta.sessions.events.stream(self.id) as stream:
             self.client.beta.sessions.events.send(self.id, events=[_user_message(text)])
-            return run.consume(stream)
+            return drain.consume(stream)

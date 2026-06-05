@@ -1,11 +1,11 @@
-"""Tests for SessionRun: the session event-stream drain."""
+"""Tests for SessionDrain: the session event-stream drain."""
 
 from __future__ import annotations
 
 from types import SimpleNamespace
 from typing import Any
 
-from session.drain import SessionRun
+from session.drain import SessionDrain
 
 READERS = frozenset({"blog-research-feed-reader"})
 
@@ -40,7 +40,7 @@ def _consume_tracking(events: list[Any], client: Any) -> tuple[list[Any], str]:
             consumed.append(e)
             yield e
 
-    reply = SessionRun(client, "sess", READERS).consume(gen())
+    reply = SessionDrain(client, "sess", READERS).consume(gen())
     return consumed, reply
 
 

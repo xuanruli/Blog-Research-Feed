@@ -13,7 +13,7 @@ def _truncate(text: str, limit: int = 500) -> str:
     return text if len(text) <= limit else text[:limit] + f"... [+{len(text) - limit} chars]"
 
 
-class SessionRun:
+class SessionDrain:
     """One drain of a session's event stream.
 
     Collects the coordinator's reply text, auto-archives fire-and-forget reader threads as they

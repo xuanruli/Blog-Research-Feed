@@ -125,7 +125,7 @@ def _try_delete_file(client: Any, file_id: str) -> None:
         LOG.warning("failed to delete env file %s: %s", file_id, exc)
 
 
-def _session_resources(client: Any, file_id: str) -> list[dict[str, Any]]:
+def _build_session_resources(client: Any, file_id: str) -> list[dict[str, Any]]:
     resources: list[dict[str, Any]] = [
         {"type": "file", "file_id": file_id, "mount_path": CONTAINER_ENV_PATH}
     ]
@@ -199,7 +199,7 @@ def run(dry_run: bool = False) -> int:
             agent_id=agent_id,
             environment_id=env_id,
             title=f"Daily aggregation {today}",
-            resources=_session_resources(client, file_id),
+            resources=_build_session_resources(client, file_id),
             auto_archive_agents=AUTO_ARCHIVE_AGENTS,
         )
         LOG.info("session id=%s", session.id)
